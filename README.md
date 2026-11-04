@@ -20,7 +20,7 @@ Agent Courier 是一个连接钉钉与不同 agent harness 的消息中转应用
 
 后续还希望接入 **DeepSeek Harness**。其具体产品、运行方式、接口和会话能力尚未确认；目前只记录此需求，暂不开展调查。不要把 DeepSeek 模型 API 自动当成这里所指的 harness。
 
-此阶段不包含模型选型、agent loop、工具执行器、远端部署或钉钉应用发布。实现语言、数据库、部署方式和远端仓库位置均未确定。
+此阶段不包含模型选型、agent loop、工具执行器、远端部署或钉钉应用发布。实现语言、数据库和部署方式均未确定。
 
 ## 建议的组件边界
 
@@ -107,7 +107,7 @@ flowchart LR
 
 ## 在另一环境继续
 
-仓库初始可移交内容只有 `README.md`、`AGENTS.md` 和 `.gitignore`。没有包管理配置、服务入口、构建命令或测试套件；不要假定已经存在可运行应用。
+当前仓库交付内容为 `README.md`、`AGENTS.md`、`.gitignore` 和 `LICENSE`。没有包管理配置、服务入口、构建命令或测试套件；不要假定已经存在可运行应用。
 
 获得后续实现任务后，建议按以下顺序推进：
 
@@ -130,4 +130,6 @@ flowchart LR
 - [钉钉消息发送说明](https://open-dingtalk.github.io/developerpedia/docs/develop/agent/send-message/)
 - [ACP 传输规范](https://agentclientprotocol.com/protocol/v1/transports)
 
-当前没有确定开源许可证或远端仓库，也没有发布或部署。
+## 许可证与仓库
+
+本项目采用 [MIT 许可证](LICENSE)，公开仓库为 [euyuil/agent-courier](https://github.com/euyuil/agent-courier)。当前仍处于文档与设计阶段，尚无应用发布或部署。
