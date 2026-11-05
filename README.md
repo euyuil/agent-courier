@@ -4,14 +4,45 @@ Agent Courier 是一个连接钉钉与不同 Harness（Agent 运行系统）的�
 
 **本项目不实现 Agent 本身。** Agent 在 Harness 中执行任务；模型调用、工具执行、本地文件访问和执行环境由接入的 Harness 提供和管理。
 
-当前状态：需求与技术设计阶段，尚无应用实现。已完成一次桌面 WorkBuddy 本地 Harness 会话互通实验，但没有完成钉钉端到端集成。
+当前状态：001 的通用核心已实现并通过 mock Harness / fake 平台的离线验证。真实 WorkBuddy 与钉钉适配仍受能力准入限制，尚无真实钉钉端到端集成、发布或部署。
 
 首个功能的[规格](specs/001-dingtalk-conversation/spec.md)与
 [实施计划](specs/001-dingtalk-conversation/plan.md)限定为文本私聊、持续上下文、运行中及时 steer、
-人工问答与单轮多输出。2026-11-05 完成方案研究及设计，选择 TypeScript、Node.js 24 LTS 和 SQLite；
-依赖与应用入口尚未落地。安装包静态检查发现 WorkBuddy 的 steer 接收与同轮消费路径，
+人工问答与单轮多输出。2026-11-05 落地 TypeScript、Node.js 24 LTS 和 SQLite 单包实现，
+包含持久路由、人工输入、输出组装、投递和本地 CLI。离线结果见
+[验证记录](specs/001-dingtalk-conversation/verification/offline.md)。安装包静态检查发现 WorkBuddy 的 steer 接收与同轮消费路径，
 但未完成已登录真实验证，不能据此声明满足该功能。平台限额和真实能力准入见
 [研究记录](specs/001-dingtalk-conversation/research.md)与[验证指南](specs/001-dingtalk-conversation/quickstart.md)。
+
+## 离线运行与检查
+
+使用 `.node-version` 指定的 Node 24.22.0。实际验证的依赖为 TypeScript 7.0.2、Zod 4.6.7、
+`dingtalk-stream` 2.1.5、`better-sqlite3` 13.0.3，内嵌 SQLite 3.53.4。
+
+```bash
+npm ci
+npm run build
+npm run typecheck
+npm test
+npm run test:coverage
+```
+
+把 `examples/config.example.json` 复制到仓库外的私有目录，配置文件权限设为 0600、目录设为 0700，
+让 `COURIER_CONFIG` 指向该副本。相对状态库路径以配置文件所在目录为基准；拒绝把状态库存到仓库内。
+
+```bash
+node dist/main.js validate-config --config "$COURIER_CONFIG"
+printf '%s\n' '{"text":"synthetic demo input"}' | node dist/main.js serve --config "$COURIER_CONFIG"
+```
+
+`serve` 当前只开放 fake 模式，从标准输入接收合成 JSON，并记录三条模拟输出的投递数。
+mock Harness 的上下文在 CLI 进程退出后消失；持久 Courier 关联与外部 Harness 续接通过保留同一测试 Harness 的重启旅程验证，
+不能把这项模拟结果当作真实跨进程上下文恢复。
+`status --session <COURIER_SESSION_ID> --json` 只读展示本地状态与可核实的本地操作/投递 ID；
+`reconcile` 必须停服取得同锁，mock 跨进程缺少查询权威时返回 5 并保留 unknown。
+
+真实模式会明确拒绝启动，配置布尔值不能绕过准入。钉钉有单独的、显式启用的入站探测入口，
+它只监听并 ACK，不发送聊天消息；使用方法及剩余边界见[验证指南](specs/001-dingtalk-conversation/quickstart.md)。
 
 ## 术语与命名
 
@@ -60,7 +91,7 @@ Agent Courier 是一个连接钉钉与不同 Harness（Agent 运行系统）的�
 后续还希望接入 **DeepSeek Harness**。其具体产品、运行方式、接口和 Harness 会话能力尚未确认；目前只记录此需求，暂不开展调查。不要把 DeepSeek 模型 API 自动当成这里所指的 Harness。
 
 此阶段不包含模型选型、Agent loop、工具执行器、远端部署或钉钉应用发布。
-首个私聊功能已有技术选型，仍未实现或部署；外部事件触发另行编写规格。
+首个私聊功能的通用核心可离线验证，真实适配尚未开放；外部事件触发另行编写规格。
 
 ## 建议的组件边界
 
@@ -176,11 +207,10 @@ Harness 会话写入权协调必须覆盖桌面客户端和 Agent Courier。仅�
 
 ## 在另一环境继续
 
-当前仓库包含项目说明、交接指南、Spec Kit 项目原则、首个功能规格及技术设计。
-没有应用包管理配置、服务入口、构建命令或测试套件；不要假定已经存在可运行应用。
-Spec Kit 的材料检查脚本不等于应用测试。
+当前仓库包含 TypeScript 源码、SQLite 迁移、CLI、测试适配器和首个功能的规格/设计/验证记录。
+依赖使用精确版本与 lockfile，运行基线固定在 `.node-version`；Spec Kit 材料检查仍不等于应用验收。
 
-获得后续实现任务后，建议按以下顺序推进：
+后续继续实施时，建议按以下顺序推进：
 
 1. 先阅读首个功能的规格与实施计划，按其范围、选型与准入检查继续；不要将外部事件或群聊自动加入首版。
 2. 按现有数据模型与适配器契约拆解任务，保留三层会话映射、人工输入、投递和操作结果的独立关联。
@@ -203,4 +233,4 @@ Spec Kit 的材料检查脚本不等于应用测试。
 
 ## 许可证与仓库
 
-本项目采用 [MIT 许可证](LICENSE)，公开仓库为 [euyuil/agent-courier](https://github.com/euyuil/agent-courier)。当前仍处于文档与设计阶段，尚无应用发布或部署。
+本项目采用 [MIT 许可证](LICENSE)，公开仓库为 [euyuil/agent-courier](https://github.com/euyuil/agent-courier)。当前通用核心仅通过离线验证，尚无应用发布或部署。

@@ -1,10 +1,10 @@
 # 验证指南：钉钉机器人持续对话
 
-**当前状态**：只有规格和设计文档，没有应用入口、依赖清单、构建命令或测试套件。
-本页区分现在可运行的文档检查与实现后必须执行的验证，不能据此报告产品已通过。
-测试/构建命令应在实现时从实际 package.json 补入并验证，本阶段不编造这些命令。
+**当前状态**：通用核心、SQLite 迁移、CLI 和 mock/fake 测试已实现。真实 Harness/钉钉适配尚未准入。
+实际离线验证见 [offline.md](verification/offline.md)，真实缺口见 [能力矩阵](verification/capability-matrix.md)。
+以下材料检查仅是辅助检查，不替代应用行为或真实端到端验收。
 
-## 现在可运行：设计材料检查
+## 设计材料辅助检查
 
 在仓库根目录运行现有 Spec Kit 脚本；下面捕获原始路径，仅输出不含本机信息的摘要：
 
@@ -52,12 +52,12 @@ PY
 5. 真实验证另需正常官方登录的独立 Harness 测试会话、合法机器人身份与两名测试用户。
    真实平台/Harness 操作必须在对应测试任务的授权范围内；本次规划未调用这些系统。
 
-实现交付 CLI 后，以下为契约约定的运行方式；**当前不能运行**。
+编译后 CLI 的以下方式可运行 fake 演示；真实模式仍受准入限制。
 `COURIER_CONFIG` 指向操作者在本地建立的私有配置，示例不展开为真实路径：
 
 ```bash
-courier validate-config --config "$COURIER_CONFIG"
-courier serve --config "$COURIER_CONFIG"
+node dist/main.js validate-config --config "$COURIER_CONFIG"
+node dist/main.js serve --config "$COURIER_CONFIG"
 ```
 
 真实模式启动不等于准入通过；能力不足应拒绝目标并报告具体原因。测试模式必须显式配置为 fake，
@@ -159,4 +159,38 @@ now 恰等于 expiresAt 时拒绝、未来 checkedAt 或不合法期限拒绝、
 `outcome` 区分 passed/failed/not_tested/blocked，不能用“未运行但预计成功”填 passed。
 
 真实 SC-001 至 SC-009 及全部必需能力通过前，保持“设计完成/核心模拟通过/真实适配未验收”等准确状态。
-当前仅完成设计材料检查；没有实际安装应用、真实任务、钉钉消息、提交、推送或部署结果。
+已完成的离线行为与剩余真实门槛分别记录在 verification；没有真实钉钉端到端验收、提交、推送或部署。
+
+## 实际离线命令与钉钉入站探测
+
+运行 Node 24.22.0，使用 `npm ci`、`npm run build`、`npm run typecheck`、`npm test`、`npm run test:coverage`。
+测试产物位于 build/test，应用产物位于 dist，源目录不接收编译产物。
+覆盖率从 V8 原始记录计算编译后应用的非空、非注释行，并包含未执行文件，不代表所有真实场景均通过。
+
+钉钉独立探测仅用于取得真实入站事实；默认不执行，显式启用后监听 60 秒并 ACK，不发送聊天消息。
+把 `{ "clientId": "<CLIENT_ID>", "clientSecret": "<CLIENT_SECRET>" }` 存为仓库外 0600 私有文件，
+让 `DINGTALK_PROBE_CREDENTIALS` 指向它；`DINGTALK_PROBE_OUTPUT` 指向仓库外 0700 私有目录中的新文件。
+
+```bash
+npm run probe:dingtalk -- --enable-live --credentials "$DINGTALK_PROBE_CREDENTIALS" --output "$DINGTALK_PROBE_OUTPUT"
+```
+
+工具就绪后只输出合成标记，让唯一测试用户把它发到机器人私聊。真实身份留在私有输出，控制台只输出计数。
+退出 0 只表示观察到了匹配入站；可靠重投作用域、限额、三条输出、到期与备用路径仍为 unverified，不能据此启用真实服务。
+该入口使用正常 Stream 凭据，不读取 WorkBuddy 登录材料。
+
+一个真实用户可覆盖单私聊正常/异常路径；两个真实用户间的隔离仍缺证。
+当前两个私聊隔离仅在 mock/fake 中验证，不能用两个合成平台会话替代真实多用户验收。
+
+### 由操作者提供环境变量
+
+操作者也可明确选择 Git 已忽略且未跟踪的 `.env`。通过 Node 的 `--env-file` 直接加载到独立探测子进程，
+无需在聊天或日志中展开凭据，也不执行 shell `source`。`.env` 权限应为 0600；状态与探测输出仍须在 Git 外。
+这只启用独立探测的凭据输入，不使真实 serve 获得准入，也不让默认离线测试自动读取 `.env`。
+
+```bash
+npm run build:test
+node --env-file=.env build/test/tests/probes/dingtalk-capabilities.js --enable-live --credentials-env --output "$DINGTALK_PROBE_OUTPUT"
+```
+
+环境变量名固定为 `DINGTALK_CLIENT_ID` 和 `DINGTALK_CLIENT_SECRET`。不得打印其值、环境列表或 SDK 原始连接错误。

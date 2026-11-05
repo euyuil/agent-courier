@@ -1,6 +1,6 @@
 # 配置与本地管理契约 v1
 
-本契约定义未来实现入口，不表示当前已有 CLI、配置加载器或 package.json。
+配置加载器与本地 CLI 已实现，真实 serve 尚未通过准入；验证边界见 `../verification/offline.md`。
 首版没有外部事件 API、群聊入口、Web 管理站点或独立用户权限系统。
 
 ## 本地配置
@@ -27,15 +27,16 @@
 配置只声明一个默认 Harness 实例；每个私聊单独建立 Harness 会话。
 修改默认实例不能迁移已有绑定；已有绑定与新配置冲突时拒绝相关路由并明确提示。
 配置重载先整体校验，失败则保留旧有效配置；成功后新建任务采用新策略，活动 Run 继续原快照。
+当前在线重载只更改展示/投递策略；存储路径、平台或 Harness 接入目标变化须重启，不能在线替换连接。
 没有另一条人工交互路径，question=false 或 permissionRequest=false 必须拒绝。
 
 凭据引用允许操作系统凭据设施或操作者提供的私有文件；不能把 WorkBuddy 进程环境当作凭据来源。
 临时 webhook 属于敏感能力，由平台适配器保存为私有引用；普通日志和状态查询不展开引用。
 使用 SQLite 本身不意味着已加密：文件权限、Git 外存放和备份保护都须落实，不能宣称有未实现的加密。
 
-## 拟议 CLI
+## CLI 与运行边界
 
-下列名称是待实现接口约定。当前仓库不能运行这些命令，也没有对应构建/测试脚本。
+下列名称是 CLI 契约；未安装 bin 时以 `node dist/main.js` 替代 `courier`。构建与测试脚本见 package.json。
 `status --session` 选择的是 Courier 会话，其值为本地 `CourierSession.id`，不是钉钉 `conversationId`
 或 `HarnessBinding.harnessSessionId`；状态 JSON 的 `session` 字段也使用同一层的 ID。
 

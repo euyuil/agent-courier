@@ -5,7 +5,7 @@ Harness 会话引用，对应绑定中的 `harnessSessionId`；`courierSessionId
 `runRef`/`expectedRunRef` 指 Harness 运行标识，`clientRunId` 指 Courier 的 `Run.id`，两侧标识不能互换。
 `session/*` 保留厂商协议原名；连接、订阅和 Harness 会话各有独立生命周期，断开连接不等于 Harness 会话或 Run 已结束。
 
-这是待实现的应用端口，不是 WorkBuddy 的公开 API 保证。
+这是已建立的应用端口，目前由测试适配器验证；它不是 WorkBuddy 的公开 API 保证。
 应用路由不得读取厂商 JSON-RPC、运行端点或进程状态；适配器不得执行 Courier 自有 Agent 循环。
 关联与状态定义见 [data-model.md](../data-model.md)，研究证据见 [research.md](../research.md)。
 

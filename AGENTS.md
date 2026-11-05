@@ -6,11 +6,13 @@
 
 Agent 在 Harness 中推理并执行任务；模型调用、工具执行和本地环境访问由 Harness 提供和管理。不要把 Agent Courier 实现成另一个 Agent。
 
-仓库目前包含项目说明、交接指南、Spec Kit 项目原则与首个私聊功能的规格和技术设计，尚无应用实现。
-当前技术选型与验证门槛见 `specs/001-dingtalk-conversation/plan.md`；依赖清单和应用入口尚未落地。
-不要编造构建或测试命令，也不要把设计或 Spec Kit 材料检查当成应用验收。
+仓库已包含首个私聊功能的离线通用核心、SQLite 迁移、CLI、mock/fake 适配器和行为测试。
+真实适配与验收仍受 `specs/001-dingtalk-conversation/plan.md` 的门槛限制；未准入时不开放真实 serve。
+实际命令为 `npm ci`、`npm run build`、`npm run typecheck`、`npm test`、`npm run test:coverage`；
+状态库和私有配置须在 Git 外。当前支持边界与结果见该功能的 `verification/`。
+不要把模拟、设计或 Spec Kit 材料检查当成真实应用验收。
 
-当前交接不代表开始实现。后续任务明确要求编写代码时，在下述项目边界内完成对应工作。
+后续实现仍须遵守下述项目边界；已有离线核心不代表真实能力已经受支持。
 
 ## 描述语言
 

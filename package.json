@@ -1,0 +1,27 @@
+{
+  "name": "agent-courier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.22.0" },
+  "bin": { "courier": "dist/main.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-migrations.mjs dist/storage/migrations",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "build:test": "tsc -p tsconfig.test.json && node scripts/copy-migrations.mjs build/test/src/storage/migrations",
+    "test": "npm run build:test && node scripts/test.mjs",
+    "test:coverage": "npm run build:test && node scripts/test.mjs --coverage",
+    "start": "node dist/main.js",
+    "probe:dingtalk": "npm run build:test && node build/test/tests/probes/dingtalk-capabilities.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "dingtalk-stream": "2.1.5",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}

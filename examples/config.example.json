@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "storage": { "databasePath": "./private/courier.sqlite" },
+  "platform": { "kind": "fake", "scopeRef": "synthetic-scope", "robotRef": "synthetic-robot" },
+  "harness": { "instanceId": "synthetic-harness", "adapter": "mock" },
+  "display": { "defaults": { "progress": true, "final": true } },
+  "delivery": { "maxAutomaticRetries": 2 }
+}

@@ -4,7 +4,7 @@
 
 **Input**：`specs/001-dingtalk-conversation/spec.md`
 
-**状态**：Phase 0 研究与 Phase 1 设计完成；应用尚未实现，真实能力尚未验收。
+**状态**：Phase 0/1 完成；通用核心已实现并通过 mock/fake 验证，真实适配与验收尚未完成。实际结果见 `verification/offline.md`。
 Setup 返回的 `BRANCH=001-dingtalk-conversation` 是脚本从功能目录推导的标识；
 实际 Git 分支为 `main`，不能将该输出视为已创建分支。
 
@@ -34,7 +34,7 @@ Harness JSON-RPC/HTTP/SSE 位于实验适配器内，使用 Node 网络能力。
 数据库和敏感能力存储置于 Git 外的配置目录，不支持网络文件系统。
 
 **Testing**：Node 内置测试运行器；确定性测试 Harness、测试平台、虚拟时钟与崩溃注入；
-真实平台验收单独记录，不能以模拟通过替代。当前无应用构建或测试命令。
+真实平台验收单独记录，不能以模拟通过替代。实际命令与结果见 README 和 verification。
 
 **Target Platform**：Linux，与桌面 Harness 同机；目前只研究 WorkBuddy 5.6.2 / CLI 2.147.0。
 这不是固定安装要求，升级须重新匹配能力证据。
@@ -91,11 +91,11 @@ specs/001-dingtalk-conversation/
     └── configuration.md
 ```
 
-本命令止于 Phase 1，不生成 `tasks.md`。后续由 `speckit-tasks` 根据这些设计拆解任务。
+任务拆解及实际勾选见 `tasks.md`；真实门槛缺证的任务保持未完成。
 
 ### Source Code (repository root)
 
-以下为拟议结构，尚未创建：
+以下为实施采用的布局；`workbuddy-experimental/` 仅在真实准入后创建，目前未落地：
 
 ```text
 src/
@@ -185,4 +185,4 @@ G-INTEGRATION 在 T075 完成后用于 T077 的真实执行准入；编写验收
 ## 扩展钩子与交付边界
 
 执行前检查未发现 `.specify/extensions.yml`；执行后再次检查，未发现该文件，无前后置钩子。
-本次只生成设计文档并同步交接说明，没有应用实现、依赖安装、真实调用、提交、推送或部署。
+规划阶段只生成设计文档；后续实施结果见 verification，不能把规划记录当成当前应用状态。

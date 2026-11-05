@@ -1,6 +1,6 @@
 # 任务清单：通过钉钉机器人与指定 Harness 中的 Agent 持续对话
 
-**日期**：2026-11-05 | **当前分支**：`main` | **状态**：任务拆解完成，全部任务尚未执行。
+**日期**：2026-11-05 | **当前分支**：`main` | **状态**：离线核心及 T074/T076 完成（66/80）；真实能力与最终验收链路尚未完成。
 
 **输入**：[spec.md](spec.md)、[plan.md](plan.md)、[research.md](research.md)、
 [data-model.md](data-model.md)、[quickstart.md](quickstart.md)、
@@ -22,7 +22,7 @@
   其余字段必填，不擅加长度/额度常数。外键和跨字段约束也必须落实到事务或数据库校验。
 - 任务完成需有实际产物/验证结果。真实实验不能运行时，记录 blocked/not_tested 并保持任务未勾选。
   阶段中的“离线核心检查点”不等于该阶段全部真实任务完成。
-- 本次不实现应用、不运行真实实验、不安装依赖、不提交或推送；此清单也不新增发布/部署授权。
+- 任务拆解阶段未实现应用；后续已按 implement 实施离线核心。提交、推送、发布和部署仍无授权。
 
 ## 真实能力门槛
 
@@ -46,13 +46,13 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 **目标**：建立单包项目和离线验证入口；本阶段才会产生应用依赖与实际构建/测试命令。
 
-- [ ] T001 在 `package.json`、`package-lock.json` 固定 Node.js 24 LTS、兼容的 TypeScript（≥5.5）、Zod 4、dingtalk-stream、better-sqlite3 及必要类型依赖，配置真实可执行的编译、类型检查和 Node 内置测试脚本；核查驱动内嵌 SQLite ≥3.51.3，不加入 ORM、Web 框架、模型 SDK 或消息代理。 依赖：无。
+- [X] T001 在 `package.json`、`package-lock.json` 固定 Node.js 24 LTS、兼容的 TypeScript（≥5.5）、Zod 4、dingtalk-stream、better-sqlite3 及必要类型依赖，配置真实可执行的编译、类型检查和 Node 内置测试脚本；核查驱动内嵌 SQLite ≥3.51.3，不加入 ORM、Web 框架、模型 SDK 或消息代理。 依赖：无。
 
-- [ ] T002 [P] 在 `tsconfig.json`、`tsconfig.test.json` 配置严格模式与明确的源码/测试输出边界，按 plan 的单包目录布局处理 ESM 导入；产物不写入源码目录，验证 T001 实际脚本可编译测试。 依赖：T001。
+- [X] T002 [P] 在 `tsconfig.json`、`tsconfig.test.json` 配置严格模式与明确的源码/测试输出边界，按 plan 的单包目录布局处理 ESM 导入；产物不写入源码目录，验证 T001 实际脚本可编译测试。 依赖：T001。
 
-- [ ] T003 [P] 更新 `.gitignore`，忽略编译产物、依赖、运行状态库/WAL/锁库、私有配置及真实验收原始材料；仅保留脱敏配置样例和合成 fixtures，验证已有 Spec Kit 共享文件规则不被覆盖。 依赖：T001。
+- [X] T003 [P] 更新 `.gitignore`，忽略编译产物、依赖、运行状态库/WAL/锁库、私有配置及真实验收原始材料；仅保留脱敏配置样例和合成 fixtures，验证已有 Spec Kit 共享文件规则不被覆盖。 依赖：T001。
 
-- [ ] T004 [P] 在 `tests/fixtures/clock.ts`、`tests/fixtures/faults.ts` 建立虚拟时钟、可观察执行屏障与崩溃注入控制，所有正文和身份使用合成值；不得连接真实账号。 依赖：T001。
+- [X] T004 [P] 在 `tests/fixtures/clock.ts`、`tests/fixtures/faults.ts` 建立虚拟时钟、可观察执行屏障与崩溃注入控制，所有正文和身份使用合成值；不得连接真实账号。 依赖：T001。
 
 
 **检查点**：依赖已锁定，类型检查和空测试发现可运行；尚无产品能力。
@@ -62,29 +62,29 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 **目标**：完成所有用户故事共同依赖的端口、持久基础、配置和测试适配器；真实能力实验不作为离线核心工作的阻塞条件。
 
-- [ ] T005 在 `src/domain/common.ts` 定义不透明 ID、时间和序号基础类型；落实原文“所有 ID 为不透明字符串；本地 ID 使用随机 UUID，不依赖正文、用户名或路径生成。”及“时间保存 UTC 时间戳，另以数据库分配的序号排序，不能用时间戳代替消息身份。”，不把平台 ID 与本地 ID 混用。 依赖：T002、T003、T004。
+- [X] T005 在 `src/domain/common.ts` 定义不透明 ID、时间和序号基础类型；落实原文“所有 ID 为不透明字符串；本地 ID 使用随机 UUID，不依赖正文、用户名或路径生成。”及“时间保存 UTC 时间戳，另以数据库分配的序号排序，不能用时间戳代替消息身份。”，不把平台 ID 与本地 ID 混用。 依赖：T002、T003、T004。
 
-- [ ] T006 [P] 在 `src/adapters/harness/port.ts`、`src/adapters/harness/events.ts` 定义契约 v1 的 probe/createSession/resumeSession/start/steer/answer/subscribe/inspect/disconnect、快速 command handle、accepted/rejected/unknown 及全部归一化事件；rejected 必须有 definitelyNotAccepted=true，能力值严格为 unverified/supported/unsupported。 依赖：T005。
+- [X] T006 [P] 在 `src/adapters/harness/port.ts`、`src/adapters/harness/events.ts` 定义契约 v1 的 probe/createSession/resumeSession/start/steer/answer/subscribe/inspect/disconnect、快速 command handle、accepted/rejected/unknown 及全部归一化事件；rejected 必须有 definitelyNotAccepted=true，能力值严格为 unverified/supported/unsupported。 依赖：T005。
 
-- [ ] T007 [P] 在 `src/adapters/dingtalk/port.ts` 定义平台无关 NormalizedInbound、ACK、send 与 inspectDelivery 端口，保留 transportMessageId/originalMessageId 两种身份和原接收范围；发送结果严格为 confirmed/not_sent/unknown/route_unavailable，查询 unsupported 不等于未发送。 依赖：T005。
+- [X] T007 [P] 在 `src/adapters/dingtalk/port.ts` 定义平台无关 NormalizedInbound、ACK、send 与 inspectDelivery 端口，保留 transportMessageId/originalMessageId 两种身份和原接收范围；发送结果严格为 confirmed/not_sent/unknown/route_unavailable，查询 unsupported 不等于未发送。 依赖：T005。
 
-- [ ] T008 [P] 在 `src/config/schema.ts`、`src/config/load.ts`、`examples/config.example.json` 实现配置契约 v1：拒绝未知字段、schemaVersion≠1、重试上限>2及关闭人工消息；正常凭据引用与 Git 外相对配置路径可用，fake 模式不读取真实引用，默认实例变更不能迁移已有绑定。 依赖：T005。
+- [X] T008 [P] 在 `src/config/schema.ts`、`src/config/load.ts`、`examples/config.example.json` 实现配置契约 v1：拒绝未知字段、schemaVersion≠1、重试上限>2及关闭人工消息；正常凭据引用与 Git 外相对配置路径可用，fake 模式不读取真实引用，默认实例变更不能迁移已有绑定。 依赖：T005。
 
-- [ ] T009 [P] 在 `src/storage/database.ts`、`src/storage/migrate.ts` 建立 better-sqlite3 单写入连接、版本检查、外键、WAL/FULL 和按文件编号顺序执行的迁移；业务事务不跨 await/网络等待，拒绝已知网络文件系统与不可读/损坏数据库，不自动删库。 依赖：T005。
+- [X] T009 [P] 在 `src/storage/database.ts`、`src/storage/migrate.ts` 建立 better-sqlite3 单写入连接、版本检查、外键、WAL/FULL 和按文件编号顺序执行的迁移；业务事务不跨 await/网络等待，拒绝已知网络文件系统与不可读/损坏数据库，不自动删库。 依赖：T005。
 
-- [ ] T010 在 `src/domain/capabilities.ts`、`src/storage/migrations/001-capabilities.sql`、`src/storage/capabilities.ts` 建立 HarnessInstance 和 CapabilityEvidence 的完整模型、持久化与版本匹配查询；按数据模型“能力证据有效性”保存 contextFingerprint、明确期限和撤销事实，比较当前版本/上下文与 scope；缺失、失败、到期、撤销或不匹配均不能推导 supported，无明确期限时不自设 TTL，旧记录不能通过修改时间戳续期。 HarnessInstance 原文字段：`id, adapterKind, productVersion, cliVersion?, capabilityEvidenceId, readiness`；原文约束：“配置目标与运行发现分离；真实端点不能作为长期实例 ID”。 CapabilityEvidence 原文字段：`id, kind, adapterVersion, productVersion, scope, contextFingerprint, checkedAt, expiresAt?, invalidatedAt?, outcome, evidenceRef`；原文约束：“outcome=unverified/passed/failed；scope 含状态与限制覆盖；有效性另按版本、上下文、期限与撤销判定，配置声明本身不是通过证据”。 依赖：T006、T008、T009。
+- [X] T010 在 `src/domain/capabilities.ts`、`src/storage/migrations/001-capabilities.sql`、`src/storage/capabilities.ts` 建立 HarnessInstance 和 CapabilityEvidence 的完整模型、持久化与版本匹配查询；按数据模型“能力证据有效性”保存 contextFingerprint、明确期限和撤销事实，比较当前版本/上下文与 scope；缺失、失败、到期、撤销或不匹配均不能推导 supported，无明确期限时不自设 TTL，旧记录不能通过修改时间戳续期。 HarnessInstance 原文字段：`id, adapterKind, productVersion, cliVersion?, capabilityEvidenceId, readiness`；原文约束：“配置目标与运行发现分离；真实端点不能作为长期实例 ID”。 CapabilityEvidence 原文字段：`id, kind, adapterVersion, productVersion, scope, contextFingerprint, checkedAt, expiresAt?, invalidatedAt?, outcome, evidenceRef`；原文约束：“outcome=unverified/passed/failed；scope 含状态与限制覆盖；有效性另按版本、上下文、期限与撤销判定，配置声明本身不是通过证据”。 依赖：T006、T008、T009。
 
-- [ ] T011 [P] 在 `src/domain/errors.ts`、`src/application/diagnostics.ts` 实现安全错误码、中文原因/执行事实/下一步模板及本地 ID 诊断；落实原文“普通日志只记录本地关联 ID 和安全错误码，不输出正文、真实平台标识、路径或 URL。”与“共享导出将本地关联 ID 再映射为临时别名，避免把真实平台身份带出。”，不直接转发底层异常。 依赖：T005。
+- [X] T011 [P] 在 `src/domain/errors.ts`、`src/application/diagnostics.ts` 实现安全错误码、中文原因/执行事实/下一步模板及本地 ID 诊断；落实原文“普通日志只记录本地关联 ID 和安全错误码，不输出正文、真实平台标识、路径或 URL。”与“共享导出将本地关联 ID 再映射为临时别名，避免把真实平台身份带出。”，不直接转发底层异常。 依赖：T005。
 
-- [ ] T012 在 `src/storage/instance-lock.ts` 实现独立锁文件数据库的生命周期排他事务，业务库仍只用短事务；二次 serve 拒绝启动、异常退出释放锁，status 只读；预留 reconcile 停服后取得同一锁的调用方式，不使用盲删 PID 锁恢复。 依赖：T009、T011。
+- [X] T012 在 `src/storage/instance-lock.ts` 实现独立锁文件数据库的生命周期排他事务，业务库仍只用短事务；二次 serve 拒绝启动、异常退出释放锁，status 只读；预留 reconcile 停服后取得同一锁的调用方式，不使用盲删 PID 锁恢复。 依赖：T009、T011。
 
-- [ ] T013 [P] 在 `tests/fixtures/harness/fake-harness.ts`、`tests/fixtures/harness/scenarios.ts` 实现可计数 start/steer/answer、原运行内消费屏障、问题/权限、输出片段、完成及失败/未知事件；包含只能排队、不及时消费、writer_occupied、事件先于 receipt 的负面配置，不能用仅 ACK 伪造 steer 生效。 依赖：T006、T010、T012。
+- [X] T013 [P] 在 `tests/fixtures/harness/fake-harness.ts`、`tests/fixtures/harness/scenarios.ts` 实现可计数 start/steer/answer、原运行内消费屏障、问题/权限、输出片段、完成及失败/未知事件；包含只能排队、不及时消费、writer_occupied、事件先于 receipt 的负面配置，不能用仅 ACK 伪造 steer 生效。 依赖：T006、T010、T012。
 
-- [ ] T014 [P] 在 `tests/fixtures/platform/fake-platform.ts` 实现持久身份重投、同文本新消息、ACK 记录、按目标的可见投递记录、限额/过期和 confirmed/not_sent/unknown；提供带证据和不带证据的查询结果，测试预算不得冒充真实平台限额。 依赖：T007、T010、T012。
+- [X] T014 [P] 在 `tests/fixtures/platform/fake-platform.ts` 实现持久身份重投、同文本新消息、ACK 记录、按目标的可见投递记录、限额/过期和 confirmed/not_sent/unknown；提供带证据和不带证据的查询结果，测试预算不得冒充真实平台限额。 依赖：T007、T010、T012。
 
-- [ ] T015 在 `tests/integration/foundation.test.ts`、`tests/contract/configuration.test.ts` 验证配置非法分支、正常凭据引用不被输出、数据库事务/迁移、二进程互斥、崩溃释放及 fake 不联网；按 T001 的实际脚本执行并修复到通过。 依赖：T008、T009、T010、T011、T012、T013、T014。
+- [X] T015 在 `tests/integration/foundation.test.ts`、`tests/contract/configuration.test.ts` 验证配置非法分支、正常凭据引用不被输出、数据库事务/迁移、二进程互斥、崩溃释放及 fake 不联网；按 T001 的实际脚本执行并修复到通过。 依赖：T008、T009、T010、T011、T012、T013、T014。
 
-- [ ] T016 在 `src/adapters/harness/admission.ts`、`tests/contract/admission.test.ts` 检查全部必需能力及版本/状态覆盖，落实数据模型的统一有效性判定；以虚拟时钟验证无期限、到期边界、未来 checkedAt、非法期限、撤销、版本/上下文变化、无关配置变化及新证据只恢复其 scope；启动/重连/重载和每次相关新副作用前重新判断，不缓存永久 supported；probe 无登录/建任务/抢写副作用，模拟证据只准入 fake，inspectOperation/replayEvents/serverIdempotency 可缺失但必须保持 unknown 分支；不合及时 steer 的目标明确拒绝。 依赖：T006、T010、T013、T015。
+- [X] T016 在 `src/adapters/harness/admission.ts`、`tests/contract/admission.test.ts` 检查全部必需能力及版本/状态覆盖，落实数据模型的统一有效性判定；以虚拟时钟验证无期限、到期边界、未来 checkedAt、非法期限、撤销、版本/上下文变化、无关配置变化及新证据只恢复其 scope；启动/重连/重载和每次相关新副作用前重新判断，不缓存永久 supported；probe 无登录/建任务/抢写副作用，模拟证据只准入 fake，inspectOperation/replayEvents/serverIdempotency 可缺失但必须保持 unknown 分支；不合及时 steer 的目标明确拒绝。 依赖：T006、T010、T013、T015。
 
 
 **检查点**：T005–T016 完成后可进入故事实现；fake 模式独立运行且无外部连接，真实支持仍关闭。
@@ -99,36 +99,36 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 ### 测试任务
 
-- [ ] T017 [P] [US1] 在 `tests/contract/harness-session.test.ts` 编写 create/load/start/steer/subscribe 的契约测试：接收与生效分离、快速 handle、不持锁等待整轮、expectedRunRef 失配、unknown 不重放及不支持/排队型目标拒绝；对应 US1-1、US1-2、US1-6、US1-7、US1-8。 依赖：T016。
+- [X] T017 [P] [US1] 在 `tests/contract/harness-session.test.ts` 编写 create/load/start/steer/subscribe 的契约测试：接收与生效分离、快速 handle、不持锁等待整轮、expectedRunRef 失配、unknown 不重放及不支持/排队型目标拒绝；对应 US1-1、US1-2、US1-6、US1-7、US1-8。 依赖：T016。
 
-- [ ] T018 [P] [US1] 在 `tests/contract/platform-ingress.test.ts` 编写平台范围校验、文本/空文本/附件、群及未知类型、ACK 与聊天回复分离的测试；缺可靠 ID 不执行，群在正文持久化前丢弃；对应 US1-3、US1-4、US1-5。 依赖：T016。
+- [X] T018 [P] [US1] 在 `tests/contract/platform-ingress.test.ts` 编写平台范围校验、文本/空文本/附件、群及未知类型、ACK 与聊天回复分离的测试；缺可靠 ID 不执行，群在正文持久化前丢弃；对应 US1-3、US1-4、US1-5。 依赖：T016。
 
-- [ ] T019 [P] [US1] 在 `tests/integration/conversation.test.ts` 编写 Q-01 至 Q-05 的独立用户旅程，用执行屏障观察两条 steer 在原任务内实际消费，验证三轮续接、正常重启、首次绑定竞争、上下文隔离和零忙时提示；记录 SC-001、SC-002、SC-009 的计数断言。 依赖：T016。
+- [X] T019 [P] [US1] 在 `tests/integration/conversation.test.ts` 编写 Q-01 至 Q-05 的独立用户旅程，用执行屏障观察两条 steer 在原任务内实际消费，验证三轮续接、正常重启、首次绑定竞争、上下文隔离和零忙时提示；记录 SC-001、SC-002、SC-009 的计数断言。 依赖：T016。
 
 
 ### 实施任务
 
-- [ ] T020 [P] [US1] 在 `src/domain/platform.ts`、`src/storage/migrations/002-platform.sql`、`src/storage/platform.ts` 建立 PlatformIdentity、Recipient、PlatformConversation 模型与按完整私聊键原子查询/创建；字段与约束按下列原文落实，非可选字段持久化必填。 PlatformIdentity 原文字段：`id, platformScope, robotId, senderId, enterpriseUserId?`；原文约束：“来源身份单独记录；enterpriseUserId 必须来自验证过的映射，不将 senderId 当企业 userId；不用于新增答复者权限模型”。 Recipient 原文字段：`id, platformScope, robotId, platformConversationId, privateUserRef?`；原文约束：“只代表原私聊接收范围；绑定后不可因投递失败换成其他目标”。 PlatformConversation 原文字段：`id, platformScope, robotId, platformConversationId, type=private, recipientId`；原文约束：“UNIQUE(platformScope, robotId, platformConversationId)；群消息不建立此记录”。 依赖：T017、T018、T019。
+- [X] T020 [P] [US1] 在 `src/domain/platform.ts`、`src/storage/migrations/002-platform.sql`、`src/storage/platform.ts` 建立 PlatformIdentity、Recipient、PlatformConversation 模型与按完整私聊键原子查询/创建；字段与约束按下列原文落实，非可选字段持久化必填。 PlatformIdentity 原文字段：`id, platformScope, robotId, senderId, enterpriseUserId?`；原文约束：“来源身份单独记录；enterpriseUserId 必须来自验证过的映射，不将 senderId 当企业 userId；不用于新增答复者权限模型”。 Recipient 原文字段：`id, platformScope, robotId, platformConversationId, privateUserRef?`；原文约束：“只代表原私聊接收范围；绑定后不可因投递失败换成其他目标”。 PlatformConversation 原文字段：`id, platformScope, robotId, platformConversationId, type=private, recipientId`；原文约束：“UNIQUE(platformScope, robotId, platformConversationId)；群消息不建立此记录”。 依赖：T017、T018、T019。
 
-- [ ] T021 [P] [US1] 在 `src/domain/session.ts`、`src/storage/migrations/003-sessions.sql`、`src/storage/sessions.ts` 建立 CourierSession 与 HarnessBinding 模型/仓储；绑定状态严格按“reserved → creating → ready”，明确失败 blocked、创建未知 unknown，已知 HarnessBinding.harnessSessionId 不清空，unavailable/writer_conflict/unknown 只能恢复原绑定。 CourierSession 原文字段：`id, platformConversationId, harnessInstanceId, policyRevision, nextInputSequence, nextDeliverySequence, revision`；原文约束：“每个平台私聊一个；配置 Harness 后不提供聊天切换或迁移”。 HarnessBinding 原文字段：`id, courierSessionId, harnessInstanceId, harnessSessionId?, status, createOperationId, revision`；原文约束：“每个 CourierSession 只有一个绑定；已建立时 UNIQUE(harnessInstanceId, harnessSessionId)，防止跨私聊共用上下文”。 依赖：T017、T018、T019。
+- [X] T021 [P] [US1] 在 `src/domain/session.ts`、`src/storage/migrations/003-sessions.sql`、`src/storage/sessions.ts` 建立 CourierSession 与 HarnessBinding 模型/仓储；绑定状态严格按“reserved → creating → ready”，明确失败 blocked、创建未知 unknown，已知 HarnessBinding.harnessSessionId 不清空，unavailable/writer_conflict/unknown 只能恢复原绑定。 CourierSession 原文字段：`id, platformConversationId, harnessInstanceId, policyRevision, nextInputSequence, nextDeliverySequence, revision`；原文约束：“每个平台私聊一个；配置 Harness 后不提供聊天切换或迁移”。 HarnessBinding 原文字段：`id, courierSessionId, harnessInstanceId, harnessSessionId?, status, createOperationId, revision`；原文约束：“每个 CourierSession 只有一个绑定；已建立时 UNIQUE(harnessInstanceId, harnessSessionId)，防止跨私聊共用上下文”。 依赖：T017、T018、T019。
 
-- [ ] T022 [P] [US1] 在 `src/domain/input.ts`、`src/storage/migrations/004-inputs.sql`、`src/storage/inputs.ts` 建立 InboundInput/InboundReceipt 模型与唯一插入；落实“received → dispatching → accepted | rejected | unknown”，前置拒绝可 received→rejected；同 ID 不同正文保留原记录并诊断，不退回正文去重。 InboundInput 原文字段：`id, dedupNamespace, originalMessageId, platformConversationId, identityId, receivedSequence, textRef, mode, runId?, pendingInputId?, status, acceptedAt?, appliedEvidenceRef?, errorCode?`；原文约束：“UNIQUE(dedupNamespace, originalMessageId)；命名空间必须经 V-05 验证；mode=start/steer/answer/invalid；相同正文新 ID 保留”。 InboundReceipt 原文字段：`id, inputId?, transportMessageId, receivedAt, ackStatus`；原文约束：“保留推送尝试与业务输入的区别；重投只关联原输入；群消息只计匿名统计，不保存正文”。 依赖：T017、T018、T019。
+- [X] T022 [P] [US1] 在 `src/domain/input.ts`、`src/storage/migrations/004-inputs.sql`、`src/storage/inputs.ts` 建立 InboundInput/InboundReceipt 模型与唯一插入；落实“received → dispatching → accepted | rejected | unknown”，前置拒绝可 received→rejected；同 ID 不同正文保留原记录并诊断，不退回正文去重。 InboundInput 原文字段：`id, dedupNamespace, originalMessageId, platformConversationId, identityId, receivedSequence, textRef, mode, runId?, pendingInputId?, status, acceptedAt?, appliedEvidenceRef?, errorCode?`；原文约束：“UNIQUE(dedupNamespace, originalMessageId)；命名空间必须经 V-05 验证；mode=start/steer/answer/invalid；相同正文新 ID 保留”。 InboundReceipt 原文字段：`id, inputId?, transportMessageId, receivedAt, ackStatus`；原文约束：“保留推送尝试与业务输入的区别；重投只关联原输入；群消息只计匿名统计，不保存正文”。 依赖：T017、T018、T019。
 
-- [ ] T023 [P] [US1] 在 `src/domain/run.ts`、`src/storage/migrations/005-runs.sql`、`src/storage/runs.ts` 建立 HarnessOperation/Run 模型、revision 更新和单活动槽；操作严格“prepared → dispatching → accepted | rejected | unknown”，任务为“submitting → running ↔ waiting_input → completed | failed”，含 unknown/not_started；“submitting/running/waiting_input/unknown” 均占用活动槽。 HarnessOperation 原文字段：`id, bindingId, inputId?, runId?, pendingInputId?, kind, expectedRunRef?, status, startedAt?, resultCode?, evidenceRef?`；原文约束：“kind=create/load/start/steer/answer；对外调用前保存意图；operationId 不自动具有远端幂等性”。 Run 原文字段：`id, courierSessionId, bindingId, initialInputId, harnessRunRef?, status, revision, policySnapshot, completionEvidenceRef?, startedAt?, finishedAt?`；原文约束：“每个 Courier 会话最多一个未决任务；steer 关联同一 Run；终态与投递状态无关”。 依赖：T017、T018、T019。
+- [X] T023 [P] [US1] 在 `src/domain/run.ts`、`src/storage/migrations/005-runs.sql`、`src/storage/runs.ts` 建立 HarnessOperation/Run 模型、revision 更新和单活动槽；操作严格“prepared → dispatching → accepted | rejected | unknown”，任务为“submitting → running ↔ waiting_input → completed | failed”，含 unknown/not_started；“submitting/running/waiting_input/unknown” 均占用活动槽。 HarnessOperation 原文字段：`id, bindingId, inputId?, runId?, pendingInputId?, kind, expectedRunRef?, status, startedAt?, resultCode?, evidenceRef?`；原文约束：“kind=create/load/start/steer/answer；对外调用前保存意图；operationId 不自动具有远端幂等性”。 Run 原文字段：`id, courierSessionId, bindingId, initialInputId, harnessRunRef?, status, revision, policySnapshot, completionEvidenceRef?, startedAt?, finishedAt?`；原文约束：“每个 Courier 会话最多一个未决任务；steer 关联同一 Run；终态与投递状态无关”。 依赖：T017、T018、T019。
 
-- [ ] T024 [P] [US1] 在 `src/domain/output.ts`、`src/storage/migrations/006-output.sql`、`src/storage/output.ts` 建立 HarnessEvent、OutputMessage、OutputFragment 全量模型；保留所有类型与 nullable 字段，complete/invalid 与展示选择独立；本故事先消费明确完整的单片段消息，US4 扩展组装行为，不把其他形态伪装完整。 HarnessEvent 原文字段：`id, bindingId, runId, sourceEventKey, eventType, sequence?, payloadRef, processedAt`；原文约束：“sourceEventKey 必须有可靠来源；无可靠重投标识时不能声称可以恢复重放整个流”。 OutputMessage 原文字段：`id, runId, sourceMessageId, kind, userVisible, logicalSequence, completeness, selected, hiddenReason?, contentRef`；原文约束：“UNIQUE(runId, sourceMessageId)；kind=progress/final/question/permission_request/error/message/tool_status/artifact；未知类型仅安全诊断”。 OutputFragment 原文字段：`id, outputMessageId, sourceFragmentKey, fragmentIndex, textRef`；原文约束：“UNIQUE(outputMessageId, sourceFragmentKey) 及 UNIQUE(outputMessageId, fragmentIndex)；从 0 连续编号，键/序号/内容不一致是协议冲突；相同正文不同片段保留”。 依赖：T017、T018、T019。
+- [X] T024 [P] [US1] 在 `src/domain/output.ts`、`src/storage/migrations/006-output.sql`、`src/storage/output.ts` 建立 HarnessEvent、OutputMessage、OutputFragment 全量模型；保留所有类型与 nullable 字段，complete/invalid 与展示选择独立；本故事先消费明确完整的单片段消息，US4 扩展组装行为，不把其他形态伪装完整。 HarnessEvent 原文字段：`id, bindingId, runId, sourceEventKey, eventType, sequence?, payloadRef, processedAt`；原文约束：“sourceEventKey 必须有可靠来源；无可靠重投标识时不能声称可以恢复重放整个流”。 OutputMessage 原文字段：`id, runId, sourceMessageId, kind, userVisible, logicalSequence, completeness, selected, hiddenReason?, contentRef`；原文约束：“UNIQUE(runId, sourceMessageId)；kind=progress/final/question/permission_request/error/message/tool_status/artifact；未知类型仅安全诊断”。 OutputFragment 原文字段：`id, outputMessageId, sourceFragmentKey, fragmentIndex, textRef`；原文约束：“UNIQUE(outputMessageId, sourceFragmentKey) 及 UNIQUE(outputMessageId, fragmentIndex)；从 0 连续编号，键/序号/内容不一致是协议冲突；相同正文不同片段保留”。 依赖：T017、T018、T019。
 
-- [ ] T025 [P] [US1] 在 `src/domain/delivery.ts`、`src/storage/migrations/007-delivery.sql`、`src/storage/delivery.ts` 建立 OutboundDelivery、DeliveryAttempt、DeliveryRoute 全量模型与原目标/递增顺序分配，nullable 关联执行交叉约束；重试调度在 US2 补齐，但初始持久记录不可省略未知结果。 OutboundDelivery 原文字段：`id, recipientId, runId?, inputId?, pendingInputId?, logicalMessageIds, deliverySequence, payloadRef, status, attemptCount, nextAttemptAt?, errorCode?`；原文约束：“UNIQUE(recipientId, deliverySequence)；runId/inputId 至少一个且接收范围一致；消息内容/目标一经尝试即不可修改；系统限制提示可无 Run，须关联 inputId”。 DeliveryAttempt 原文字段：`id, deliveryId, attemptNo, routeId, startedAt, outcome, providerReceiptRef?, errorCode?`；原文约束：“UNIQUE(deliveryId, attemptNo)，最多三次自动尝试；路由变化不重置预算”。 DeliveryRoute 原文字段：`id, recipientId, kind, sensitiveCapabilityRef?, expiresAt?, verifiedLimits, capabilityEvidenceId, status`；原文约束：“kind=sessionWebhook/oto；替代路径必须证明同原私聊；真实 URL 和密钥不进入共享记录”。 依赖：T017、T018、T019。
+- [X] T025 [P] [US1] 在 `src/domain/delivery.ts`、`src/storage/migrations/007-delivery.sql`、`src/storage/delivery.ts` 建立 OutboundDelivery、DeliveryAttempt、DeliveryRoute 全量模型与原目标/递增顺序分配，nullable 关联执行交叉约束；重试调度在 US2 补齐，但初始持久记录不可省略未知结果。 OutboundDelivery 原文字段：`id, recipientId, runId?, inputId?, pendingInputId?, logicalMessageIds, deliverySequence, payloadRef, status, attemptCount, nextAttemptAt?, errorCode?`；原文约束：“UNIQUE(recipientId, deliverySequence)；runId/inputId 至少一个且接收范围一致；消息内容/目标一经尝试即不可修改；系统限制提示可无 Run，须关联 inputId”。 DeliveryAttempt 原文字段：`id, deliveryId, attemptNo, routeId, startedAt, outcome, providerReceiptRef?, errorCode?`；原文约束：“UNIQUE(deliveryId, attemptNo)，最多三次自动尝试；路由变化不重置预算”。 DeliveryRoute 原文字段：`id, recipientId, kind, sensitiveCapabilityRef?, expiresAt?, verifiedLimits, capabilityEvidenceId, status`；原文约束：“kind=sessionWebhook/oto；替代路径必须证明同原私聊；真实 URL 和密钥不进入共享记录”。 依赖：T017、T018、T019。
 
-- [ ] T026 [US1] 在 `src/application/sessions.ts` 实现指定实例上的首次绑定预留、创建、原 Harness 会话 load 和正常重启后的关联恢复；运行发现不进入应用层；“每个 CourierSession 只有一个绑定”，并发首建未核实阻塞后续输入，不双建、不换 Harness、不按历史摘要冒充续接。 依赖：T020、T021、T022、T023、T024、T025。
+- [X] T026 [US1] 在 `src/application/sessions.ts` 实现指定实例上的首次绑定预留、创建、原 Harness 会话 load 和正常重启后的关联恢复；运行发现不进入应用层；“每个 CourierSession 只有一个绑定”，并发首建未核实阻塞后续输入，不双建、不换 Harness、不按历史摘要冒充续接。 依赖：T020、T021、T022、T023、T024、T025。
 
-- [ ] T027 [US1] 在 `src/application/inbound.ts`、`src/application/dispatch.ts` 实现 T1–T3：短事务入站去重后 ACK、预留操作/Run 后释放锁、事务外 start 或按 expectedRunRef steer；固定接收时策略快照，人工答复端口优先而未实现时报告交互阻塞；正常输入不排队、不隐式批准、不额外发状态提示。 每次新转交调用前复核对应能力证据有效性，失效只阻止受影响的新操作并安全提示，不改写原 Run 或人工请求事实。 依赖：T026。
+- [X] T027 [US1] 在 `src/application/inbound.ts`、`src/application/dispatch.ts` 实现 T1–T3：短事务入站去重后 ACK、预留操作/Run 后释放锁、事务外 start 或按 expectedRunRef steer；固定接收时策略快照，人工答复端口优先而未实现时报告交互阻塞；正常输入不排队、不隐式批准、不额外发状态提示。 每次新转交调用前复核对应能力证据有效性，失效只阻止受影响的新操作并安全提示，不改写原 Run 或人工请求事实。 依赖：T026。
 
-- [ ] T028 [US1] 在 `src/application/events.ts` 实现带可靠关联的事件归约及单片段完整逻辑消息的事务 outbox：先控制状态后展示；received/accepted/applied 分开，final 不代替 completed，晚到 accepted 不回退终态，矛盾权威证据停止相关副作用；未知内部类型只安全诊断。 依赖：T027。
+- [X] T028 [US1] 在 `src/application/events.ts` 实现带可靠关联的事件归约及单片段完整逻辑消息的事务 outbox：先控制状态后展示；received/accepted/applied 分开，final 不代替 completed，晚到 accepted 不回退终态，矛盾权威证据停止相关副作用；未知内部类型只安全诊断。 依赖：T027。
 
-- [ ] T029 [US1] 在 `src/delivery/dispatch.ts` 实现 T5 单条发送：持久化 sending/attempt 后事务外调用，确认保存 delivered、明确失败记录失败原因、未知保存 unknown；“delivered 表示平台确认接收成功，不代表用户已读”，不得重跑 Harness 或发送已成功消息，后续重试机制由 US2 接入。 依赖：T028。
+- [X] T029 [US1] 在 `src/delivery/dispatch.ts` 实现 T5 单条发送：持久化 sending/attempt 后事务外调用，确认保存 delivered、明确失败记录失败原因、未知保存 unknown；“delivered 表示平台确认接收成功，不代表用户已读”，不得重跑 Harness 或发送已成功消息，后续重试机制由 US2 接入。 依赖：T028。
 
-- [ ] T030 [US1] 在 `src/main.ts`、`src/cli/serve.ts`、`src/cli/validate-config.ts` 组合配置校验、互斥锁、迁移、恢复、平台入站、Harness 事件和出站生命周期；fake 模式可跑全链路，真实模式须准入后才注册；退出只断开 Courier 自有连接，不取消 Harness 中的 Agent 任务。 依赖：T029。
+- [X] T030 [US1] 在 `src/main.ts`、`src/cli/serve.ts`、`src/cli/validate-config.ts` 组合配置校验、互斥锁、迁移、恢复、平台入站、Harness 事件和出站生命周期；fake 模式可跑全链路，真实模式须准入后才注册；退出只断开 Courier 自有连接，不取消 Harness 中的 Agent 任务。 依赖：T029。
 
 - [ ] T031 [P] [US1] 在 `tests/probes/workbuddy-capabilities.ts` 编写显式手动启用的最小能力实验，并将脱敏结果写入 `specs/001-dingtalk-conversation/verification/workbuddy-capabilities.md`：按 quickstart 验证 V-03、V-04、V-05 的 Harness 部分，覆盖当前版本、官方登录、发现/激活、写入权、各运行状态的 steer 实际消费、人工往返、分类/片段/完成与核实边界；协议探测客户端重连仅作底层续接证据，实际 Courier 重启与整条钉钉链路留给 T077；未实测不得记 passed，不提取凭据或固定诊断端点。 依赖：T016。
 
@@ -140,7 +140,7 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 - [ ] T035 [US1] 仅在 T032 的发送边界明确后，在 `src/adapters/dingtalk/webhook.ts` 实现原私聊 webhook 发送、到期/长度/限额校验、业务码解析和显式超时；关闭修改请求隐式重试，私有保存 webhook 引用，不把超时认定未发送；单条失败/未知通过平台端口返回。 真实门槛：G-D。 依赖：T032、T034。
 
-- [ ] T036 [US1] 运行 `tests/integration/conversation.test.ts` 与本故事契约测试，修复到 Q-01 至 Q-05 全部通过，并将真实执行命令、计数和模拟边界记入 `specs/001-dingtalk-conversation/verification/us1.md`；只依赖离线核心完成即可执行，真实实验/适配未完成仍保留对应任务未勾选。 依赖：T017、T018、T019、T030。
+- [X] T036 [US1] 运行 `tests/integration/conversation.test.ts` 与本故事契约测试，修复到 Q-01 至 Q-05 全部通过，并将真实执行命令、计数和模拟边界记入 `specs/001-dingtalk-conversation/verification/us1.md`；只依赖离线核心完成即可执行，真实实验/适配未完成仍保留对应任务未勾选。 依赖：T017、T018、T019、T030。
 
 
 **检查点**：T036 是 US1 离线核心检查点，可作为开发 MVP；T031–T035 的真实分支如有阻塞仍保留未完成，不把离线通过报告为 US1 真实验收。
@@ -155,38 +155,38 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 ### 测试任务
 
-- [ ] T037 [P] [US2] 在 `tests/contract/delivery-outcomes.test.ts` 编写 webhook/OTO 结果适配契约：HTTP 200 仍检查业务结果、已读不等于未发送、路径/长度/权限失败区别于超时 unknown、未知不切换路径补发，fake 与实际传输替身遵守相同契约；覆盖 US2-3、US2-4、US2-5、US2-9、US2-12。 依赖：T036。
+- [X] T037 [P] [US2] 在 `tests/contract/delivery-outcomes.test.ts` 编写 webhook/OTO 结果适配契约：HTTP 200 仍检查业务结果、已读不等于未发送、路径/长度/权限失败区别于超时 unknown、未知不切换路径补发，fake 与实际传输替身遵守相同契约；覆盖 US2-3、US2-4、US2-5、US2-9、US2-12。 依赖：T036。
 
-- [ ] T038 [P] [US2] 在 `tests/integration/recovery.test.ts` 编写 create/start/steer/send 调用前、对方已接收而本地确认前、确认落盘后的崩溃测试，覆盖数据库不可读、先 completed/failed 后 accepted 和冲突证据；对应 US2-6、US2-10、US2-11、Q-19、Q-21，人工请求分支在 US3 扩展。 依赖：T036。
+- [X] T038 [P] [US2] 在 `tests/integration/recovery.test.ts` 编写 create/start/steer/send 调用前、对方已接收而本地确认前、确认落盘后的崩溃测试，覆盖数据库不可读、先 completed/failed 后 accepted 和冲突证据；对应 US2-6、US2-10、US2-11、Q-19、Q-21，人工请求分支在 US3 扩展。 依赖：T036。
 
-- [ ] T039 [P] [US2] 在 `tests/integration/deduplication.test.ts` 编写原始消息重投十次与相同正文新 ID 的计数测试，覆盖并发重投、重启后重投、缺可靠 ID、同 ID 冲突正文及底层 answer 模式操作的重投抑制；原请求路由的完整往返由 US3 验证；对应 US2-1、US2-2、SC-004。 依赖：T036。
+- [X] T039 [P] [US2] 在 `tests/integration/deduplication.test.ts` 编写原始消息重投十次与相同正文新 ID 的计数测试，覆盖并发重投、重启后重投、缺可靠 ID、同 ID 冲突正文及底层 answer 模式操作的重投抑制；原请求路由的完整往返由 US3 验证；对应 US2-1、US2-2、SC-004。 依赖：T036。
 
 
 ### 实施任务
 
-- [ ] T040 [US2] 在 `src/application/input-ledger.ts`、`src/storage/inputs.ts` 固化命名空间去重与跨重启 tombstone 保留，整合 `src/application/inbound.ts`，保证“UNIQUE(dedupNamespace, originalMessageId)”只来自已验证标识；重投只关联原记录，不重复提示/提交；“首版不自动删除去重键、请求编号、操作确认和三层会话映射”。 依赖：T037、T038、T039。
+- [X] T040 [US2] 在 `src/application/input-ledger.ts`、`src/storage/inputs.ts` 固化命名空间去重与跨重启 tombstone 保留，整合 `src/application/inbound.ts`，保证“UNIQUE(dedupNamespace, originalMessageId)”只来自已验证标识；重投只关联原记录，不重复提示/提交；“首版不自动删除去重键、请求编号、操作确认和三层会话映射”。 依赖：T037、T038、T039。
 
-- [ ] T041 [US2] 在 `src/delivery/scheduler.ts`、`src/delivery/retry-policy.ts` 实现每私聊串行调度及“pending → sending → delivered | retry_wait | failed | unknown”；“retry_wait → sending”仅用于确认未投递且可重试，首次后最多两次重试，遵守 Retry-After/已验证限额；耗尽后放行后续并生成有限缺失提示，unknown 只暂停原私聊出站。 依赖：T040。
+- [X] T041 [US2] 在 `src/delivery/scheduler.ts`、`src/delivery/retry-policy.ts` 实现每私聊串行调度及“pending → sending → delivered | retry_wait | failed | unknown”；“retry_wait → sending”仅用于确认未投递且可重试，首次后最多两次重试，遵守 Retry-After/已验证限额；耗尽后放行后续并生成有限缺失提示，unknown 只暂停原私聊出站。 依赖：T040。
 
-- [ ] T042 [US2] 在 `src/delivery/routes.ts`、`src/delivery/limits.ts` 实现应用/机器人/接收人/路由各作用域预算、过期检查与同私聊路径选择；每次发送前分别检查平台能力证据有效性及路由期限，不把两者混用；替代路径仅有已授权/已验证同目标证据时可用，单条超长失败不截断；换路径不重置预算，未知不换路补发，无路径的 pending 保留可查。 依赖：T041。
+- [X] T042 [US2] 在 `src/delivery/routes.ts`、`src/delivery/limits.ts` 实现应用/机器人/接收人/路由各作用域预算、过期检查与同私聊路径选择；每次发送前分别检查平台能力证据有效性及路由期限，不把两者混用；替代路径仅有已授权/已验证同目标证据时可用，单条超长失败不截断；换路径不重置预算，未知不换路补发，无路径的 pending 保留可查。 依赖：T041。
 
-- [ ] T043 [US2] 在 `src/application/failure-reporting.ts`、`tests/unit/failure-reporting.test.ts` 实现缺目标、writer_occupied、不可续接、失效登录、部分输出后失败、应有最终内容缺失及超长/路径失效的中文说明；引用“error 默认 true，关闭只影响 Harness 展示事件，必要的 Courier 故障、限制和交互阻塞提示仍须保留。”，过滤 final 不误报无内容，错误提示失败不递归。 依赖：T042。
+- [X] T043 [US2] 在 `src/application/failure-reporting.ts`、`tests/unit/failure-reporting.test.ts` 实现缺目标、writer_occupied、不可续接、失效登录、部分输出后失败、应有最终内容缺失及超长/路径失效的中文说明；引用“error 默认 true，关闭只影响 Harness 展示事件，必要的 Courier 故障、限制和交互阻塞提示仍须保留。”，过滤 final 不误报无内容，错误提示失败不递归。 依赖：T042。
 
-- [ ] T044 [US2] 在 `src/application/recovery.ts` 接入 `src/cli/serve.ts`，将遗留 dispatching/sending 和无法确认的执行标 unknown，仅已确认未派发的旧普通输入记“rejected/recovery_interrupted”；保留 accepted 与原绑定，损坏数据不删库重建，未知任务占活动槽、后续不安全输入明确拒绝且不累积恢复队列。 依赖：T043。
+- [X] T044 [US2] 在 `src/application/recovery.ts` 接入 `src/cli/serve.ts`，将遗留 dispatching/sending 和无法确认的执行标 unknown，仅已确认未派发的旧普通输入记“rejected/recovery_interrupted”；保留 accepted 与原绑定，损坏数据不删库重建，未知任务占活动槽、后续不安全输入明确拒绝且不累积恢复队列。 依赖：T043。
 
-- [ ] T045 [US2] 在 `src/application/reconcile.ts` 实现只读远端核实后原子保存：unknown 操作凭权威证据 accepted/rejected；投递确认已送达→delivered，确认未送达且可重试/预算剩余→retry_wait，否则 failed，无依据仍 unknown；“核实成功解除对应顺序阻塞，核实、重启和换路径均不重置 attemptCount。”且不直接重发任何输入/决定/消息。 依赖：T044。
+- [X] T045 [US2] 在 `src/application/reconcile.ts` 实现只读远端核实后原子保存：unknown 操作凭权威证据 accepted/rejected；投递确认已送达→delivered，确认未送达且可重试/预算剩余→retry_wait，否则 failed，无依据仍 unknown；“核实成功解除对应顺序阻塞，核实、重启和换路径均不重置 attemptCount。”且不直接重发任何输入/决定/消息。 依赖：T044。
 
-- [ ] T046 [US2] 在 `src/cli/status.ts`、`src/cli/reconcile.ts` 实现脱敏只读状态及 operation/delivery 互斥参数；reconcile 必须停服并取得同锁后才写证据，服务运行时拒绝；落实契约退出码 0/2/3/4/5，status=0 不表示任务成功，无强制重放、接管或自动批准入口。 依赖：T045。
+- [X] T046 [US2] 在 `src/cli/status.ts`、`src/cli/reconcile.ts` 实现脱敏只读状态及 operation/delivery 互斥参数；reconcile 必须停服并取得同锁后才写证据，服务运行时拒绝；落实契约退出码 0/2/3/4/5，status=0 不表示任务成功，无强制重放、接管或自动批准入口。 依赖：T045。
 
 - [ ] T047 [P] [US2] 在 `src/adapters/workbuddy-experimental/inspect.ts`、`src/adapters/workbuddy-experimental/errors.ts` 映射登录、写入权、原 Harness 会话/任务/请求查询与断连；只使用 T031 验证的查询事实，没有权威核实时返回 unsupported/unknown，不把历史存在或查询缺失推导成完成/未执行。 真实门槛：G-H。 依赖：T031、T033、T046。
 
 - [ ] T048 [P] [US2] 在 `src/adapters/dingtalk/oto.ts`、`src/adapters/dingtalk/inspect.ts` 实现经 V-02 验证后的单元素 userIds 原机器人私聊备用路径及可证明的结果查询；无授权、缺企业映射或未证同私聊时禁用路径并返回限制，过程查询键/已读结果不能补造幂等或未发送证据。 真实门槛：G-D-OTO。 依赖：T032、T034、T035、T046。
 
-- [ ] T049 [US2] 在 `tests/integration/delivery-recovery.test.ts` 验证三条有序消息第二条临时失败、三次耗尽、unknown 暂停与三种核实结果、路由切换不重置预算，以及其他私聊和 Harness 控制继续；覆盖 Q-07、Q-08、Q-10、Q-20、SC-005，断言额外执行次数（由 Harness 记录）为零。 依赖：T041、T042、T045、T046。
+- [X] T049 [US2] 在 `tests/integration/delivery-recovery.test.ts` 验证三条有序消息第二条临时失败、三次耗尽、unknown 暂停与三种核实结果、路由切换不重置预算，以及其他私聊和 Harness 控制继续；覆盖 Q-07、Q-08、Q-10、Q-20、SC-005，断言额外执行次数（由 Harness 记录）为零。 依赖：T041、T042、T045、T046。
 
-- [ ] T050 [US2] 在 `tests/integration/session-failures.test.ts` 验证 writer_occupied、缺原 Harness 会话、失效登录、无可交付内容和状态矛盾；使用合成敏感错误检查用户提示/CLI/共享导出的隐私，验证 Q-09、Q-18 和 US2-7、US2-8、US2-10、US2-13，不调用真实工具。 依赖：T043、T044、T046。
+- [X] T050 [US2] 在 `tests/integration/session-failures.test.ts` 验证 writer_occupied、缺原 Harness 会话、失效登录、无可交付内容和状态矛盾；使用合成敏感错误检查用户提示/CLI/共享导出的隐私，验证 Q-09、Q-18 和 US2-7、US2-8、US2-10、US2-13，不调用真实工具。 依赖：T043、T044、T046。
 
-- [ ] T051 [US2] 执行 US2 的契约、去重、Harness 会话失败与崩溃/核实测试，将 Q-06 至 Q-10、Q-18 至 Q-21 的本故事分支结果记入 `specs/001-dingtalk-conversation/verification/us2.md`；记录实际命令及输入/执行/投递计数，真实适配结果单列，未执行不勾选真实任务。 依赖：T037、T038、T039、T040、T041、T042、T043、T044、T045、T046、T049、T050。
+- [X] T051 [US2] 执行 US2 的契约、去重、Harness 会话失败与崩溃/核实测试，将 Q-06 至 Q-10、Q-18 至 Q-21 的本故事分支结果记入 `specs/001-dingtalk-conversation/verification/us2.md`；记录实际命令及输入/执行/投递计数，真实适配结果单列，未执行不勾选真实任务。 依赖：T037、T038、T039、T040、T041、T042、T043、T044、T045、T046、T049、T050。
 
 
 **检查点**：US2 核心可用合成消息与故障独立验证；人工请求生命周期的完整恢复由 US3 追加集成测试，不削弱既有 unknown 规则。
@@ -201,30 +201,30 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 ### 测试任务
 
-- [ ] T052 [P] [US3] 在 `tests/contract/harness-interaction.test.ts` 编写 answer、input.requested/input.invalidated 和不可变 answerSchema 映射测试，覆盖文本/表单、批准范围、拒绝、接收未知和过期/撤销；覆盖 input.requested 与正文先后到达、重投、同请求换消息/同消息换请求及绑定/Run/类型冲突；缺字段/非法选项不提交，resolved 不代替原任务后续状态。 依赖：T051。
+- [X] T052 [P] [US3] 在 `tests/contract/harness-interaction.test.ts` 编写 answer、input.requested/input.invalidated 和不可变 answerSchema 映射测试，覆盖文本/表单、批准范围、拒绝、接收未知和过期/撤销；覆盖 input.requested 与正文先后到达、重投、同请求换消息/同消息换请求及绑定/Run/类型冲突；缺字段/非法选项不提交，resolved 不代替原任务后续状态。 依赖：T051。
 
-- [ ] T053 [P] [US3] 在 `tests/integration/human-input.test.ts`、`tests/unit/reply-parser.test.ts` 编写 Q-11 至 Q-14：显式编号、歧义词、/补充、多个请求、其他私聊、无答复、重复决定、撤销、未知，以及等待人工输入时 steer 与有效答复优先；包括 US3-1 至 US3-8 的独立断言。 依赖：T051。
+- [X] T053 [P] [US3] 在 `tests/integration/human-input.test.ts`、`tests/unit/reply-parser.test.ts` 编写 Q-11 至 Q-14：显式编号、歧义词、/补充、多个请求、其他私聊、无答复、重复决定、撤销、未知，以及等待人工输入时 steer 与有效答复优先；包括 US3-1 至 US3-8 的独立断言。 依赖：T051。
 
 
 ### 实施任务
 
-- [ ] T054 [US3] 在 `src/domain/pending-input.ts`、`src/storage/migrations/008-pending-inputs.sql`、`src/storage/pending-inputs.ts` 建立 PendingInput 完整模型、原请求映射和原子 answerInputId 预留；按原文“validity=open | withdrawn | expired | closed_by_run”与“answerStatus=none | dispatching | accepted | rejected | unknown”分别保存，sourceMessageId 与原字段模式/选项映射持久化，编号不复用；原请求事件先到时允许正文尚不存在，正文到达后按同 Run 消息键校验，不伪造消息开始或顺序。 PendingInput 原文字段：`id, runId, bindingId, platformConversationId, vendorRequestId, sourceMessageId, kind, publicCode, promptRef?, answerSchema?, options?, adapterMappingRef, validity, answerStatus, answerInputId?, revision`；原文约束：“kind=question/permission；UNIQUE(bindingId, runId, vendorRequestId) 及 UNIQUE(runId, sourceMessageId)；publicCode 在同私聊历史范围不复用；原消息关联、问题字段模式与选项映射持久化，重启不重新猜测”。 依赖：T052、T053。
+- [X] T054 [US3] 在 `src/domain/pending-input.ts`、`src/storage/migrations/008-pending-inputs.sql`、`src/storage/pending-inputs.ts` 建立 PendingInput 完整模型、原请求映射和原子 answerInputId 预留；按原文“validity=open | withdrawn | expired | closed_by_run”与“answerStatus=none | dispatching | accepted | rejected | unknown”分别保存，sourceMessageId 与原字段模式/选项映射持久化，编号不复用；原请求事件先到时允许正文尚不存在，正文到达后按同 Run 消息键校验，不伪造消息开始或顺序。 PendingInput 原文字段：`id, runId, bindingId, platformConversationId, vendorRequestId, sourceMessageId, kind, publicCode, promptRef?, answerSchema?, options?, adapterMappingRef, validity, answerStatus, answerInputId?, revision`；原文约束：“kind=question/permission；UNIQUE(bindingId, runId, vendorRequestId) 及 UNIQUE(runId, sourceMessageId)；publicCode 在同私聊历史范围不复用；原消息关联、问题字段模式与选项映射持久化，重启不重新猜测”。 依赖：T052、T053。
 
-- [ ] T055 [US3] 在 `src/adapters/dingtalk/reply-parser.ts`、`src/domain/answer.ts` 实现 /答复、/批准、/拒绝、/补充 的明确语法与固定歧义词规则；按契约 text/form/permission 联合类型校验，form 字段 valueType=text/choice/choices、必填和选项码严格匹配；不把普通 JSON/同意猜成授权，不扩大批准范围，不新增身份/角色校验。 依赖：T054。
+- [X] T055 [US3] 在 `src/adapters/dingtalk/reply-parser.ts`、`src/domain/answer.ts` 实现 /答复、/批准、/拒绝、/补充 的明确语法与固定歧义词规则；按契约 text/form/permission 联合类型校验，form 字段 valueType=text/choice/choices、必填和选项码严格匹配；不把普通 JSON/同意猜成授权，不扩大批准范围，不新增身份/角色校验。 依赖：T054。
 
-- [ ] T056 [US3] 在 `src/application/interaction-presenter.ts` 为原请求生成同私聊不复用编号、字段/权限选项说明及安全投递内容；复用持久 sourceMessageId/编号，只有正文完整且请求映射落盘后才在 T4 中创建唯一请求正文投递，记录 pendingInputId 与原 logicalMessageIds；正文先到则保留待关联，重投或重启均不再次编号/创建投递，冲突映射停止相关投递，不将问题/权限合并为进度。 依赖：T055。
+- [X] T056 [US3] 在 `src/application/interaction-presenter.ts` 为原请求生成同私聊不复用编号、字段/权限选项说明及安全投递内容；复用持久 sourceMessageId/编号，只有正文完整且请求映射落盘后才在 T4 中创建唯一请求正文投递，记录 pendingInputId 与原 logicalMessageIds；正文先到则保留待关联，重投或重启均不再次编号/创建投递，冲突映射停止相关投递，不将问题/权限合并为进度。 依赖：T055。
 
-- [ ] T057 [US3] 在 `src/application/pending-inputs.ts` 处理请求登记、失效、有效集合与 Run.waiting_input：Harness 明确撤销/过期/终态才关闭，缺答复不超时代答；“rejected 且明确未接收时可接受用户随后发来的新答复；unknown 时不能再次提交决定。”，schema 改变必须失效旧请求并建立新关联。 依赖：T056。
+- [X] T057 [US3] 在 `src/application/pending-inputs.ts` 处理请求登记、失效、有效集合与 Run.waiting_input：Harness 明确撤销/过期/终态才关闭，缺答复不超时代答；“rejected 且明确未接收时可接受用户随后发来的新答复；unknown 时不能再次提交决定。”，schema 改变必须失效旧请求并建立新关联。 依赖：T056。
 
-- [ ] T058 [US3] 在 `src/application/answer-routing.ts` 接入 `src/application/dispatch.ts`，先核对原私聊/绑定/Run/请求/revision 与当前证据有效性，再预留并转交一次答案；有效人工答复优先于尚未提交的普通输入，普通 steer 失败不能丢失原请求；steer 撤销竞态不将旧同意转给新请求，跨私聊即使含编号也不转交。 依赖：T057。
+- [X] T058 [US3] 在 `src/application/answer-routing.ts` 接入 `src/application/dispatch.ts`，先核对原私聊/绑定/Run/请求/revision 与当前证据有效性，再预留并转交一次答案；有效人工答复优先于尚未提交的普通输入，普通 steer 失败不能丢失原请求；steer 撤销竞态不将旧同意转给新请求，跨私聊即使含编号也不转交。 依赖：T057。
 
 - [ ] T059 [US3] 仅在 T031 的 V-04 有对应证据后，在 `src/adapters/workbuddy-experimental/interaction.ts` 实现问题/权限事件和答复映射，区分传输 ID、持久 requestId 与选项范围，保存 adapterMappingRef；使用已验证的标准权限或内部 interruption 路径，明确实验边界，无法接收答复时报告阻塞。 真实门槛：G-H-INTERACTION。 依赖：T031、T033、T047、T058。
 
-- [ ] T060 [US3] 在 `src/application/interaction-recovery.ts`、`tests/integration/interaction-recovery.test.ts` 接入 US2 恢复与核实，验证 answer 在调用前/对方接收后/确认落盘后崩溃及重启后 schema/映射保存；新增请求映射已落盘但正文未完成时的崩溃窗口，断言可靠补齐后原编号、原关联及请求正文投递均唯一、重复事件不双发，缺失内容无法可靠补齐则保留请求并报告阻塞；unknown 决定不重放、撤销后 accepted 不重开请求，完整覆盖 Q-19/Q-21 的人工分支与 US3-8。 依赖：T058。
+- [X] T060 [US3] 在 `src/application/interaction-recovery.ts`、`tests/integration/interaction-recovery.test.ts` 接入 US2 恢复与核实，验证 answer 在调用前/对方接收后/确认落盘后崩溃及重启后 schema/映射保存；新增请求映射已落盘但正文未完成时的崩溃窗口，断言可靠补齐后原编号、原关联及请求正文投递均唯一、重复事件不双发，缺失内容无法可靠补齐则保留请求并报告阻塞；unknown 决定不重放、撤销后 accepted 不重开请求，完整覆盖 Q-19/Q-21 的人工分支与 US3-8。 依赖：T058。
 
-- [ ] T061 [US3] 在 `src/main.ts`、`src/application/inbound.ts`、`src/application/events.ts` 注册人工解析/展示/生命周期/优先路由及恢复钩子；控制状态更新不经过展示过滤，question/permissionRequest=false 拒绝配置，运行期交互失效如实报阻塞；重复人工原消息只 ACK 不再次提交。 依赖：T060。
+- [X] T061 [US3] 在 `src/main.ts`、`src/application/inbound.ts`、`src/application/events.ts` 注册人工解析/展示/生命周期/优先路由及恢复钩子；控制状态更新不经过展示过滤，question/permissionRequest=false 拒绝配置，运行期交互失效如实报阻塞；重复人工原消息只 ACK 不再次提交。 依赖：T060。
 
-- [ ] T062 [US3] 执行 US3 全部模拟测试并重跑受影响的 US1 steer、US2 重投/恢复测试，将 Q-11 至 Q-14、Q-19/Q-21 的人工分支和 SC-006 结果写入 `specs/001-dingtalk-conversation/verification/us3.md`；真实 V-04 与钉钉完整往返在最终集成单独验收。 依赖：T052、T053、T054、T055、T056、T057、T058、T060、T061。
+- [X] T062 [US3] 执行 US3 全部模拟测试并重跑受影响的 US1 steer、US2 重投/恢复测试，将 Q-11 至 Q-14、Q-19/Q-21 的人工分支和 SC-006 结果写入 `specs/001-dingtalk-conversation/verification/us3.md`；真实 V-04 与钉钉完整往返在最终集成单独验收。 依赖：T052、T053、T054、T055、T056、T057、T058、T060、T061。
 
 
 **检查点**：US3 离线完整往返通过；不引入答复者权限名单，运行时交互阻塞可查且不自动批准。
@@ -239,30 +239,30 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 ### 测试任务
 
-- [ ] T063 [P] [US4] 在 `tests/contract/harness-output.test.ts` 编写明确类型、userVisible、消息开始/片段/结束、0..N 序号、重复键/索引冲突、尾片段晚于 Run 终态与不支持分类的契约测试；拒绝从正文、静默超时或 thought 片段猜 progress/final；对应 US4-4、US4-8。 依赖：T062。
+- [X] T063 [P] [US4] 在 `tests/contract/harness-output.test.ts` 编写明确类型、userVisible、消息开始/片段/结束、0..N 序号、重复键/索引冲突、尾片段晚于 Run 终态与不支持分类的契约测试；拒绝从正文、静默超时或 thought 片段猜 progress/final；对应 US4-4、US4-8。 依赖：T062。
 
-- [ ] T064 [P] [US4] 在 `tests/integration/output-policy.test.ts` 编写四种展示组合、相邻合并、超长合并回退、运行中重载/steer 快照、问题错误默认保留、未知内容及真实终态独立的 Q-15 至 Q-18 测试；对应 US4-1 至 US4-8、SC-003。 依赖：T062。
+- [X] T064 [P] [US4] 在 `tests/integration/output-policy.test.ts` 编写四种展示组合、相邻合并、超长合并回退、运行中重载/steer 快照、问题错误默认保留、未知内容及真实终态独立的 Q-15 至 Q-18 测试；对应 US4-1 至 US4-8、SC-003。 依赖：T062。
 
 
 ### 实施任务
 
-- [ ] T065 [US4] 在 `src/domain/display-policy.ts`、`src/application/policy-snapshot.ts` 完整实现 Run.policySnapshot 的 revision/progress/final/question/permissionRequest/error/message/toolStatus/artifact/mergeAdjacentProgress，落实原文“默认 progress/final/question/permissionRequest/error=true，message/toolStatus/artifact=false，mergeAdjacentProgress=false。”和“首轮 received 时为预留 Run 固定快照，后续 steer 不改变它；新一轮使用当前配置。”，关闭 question/permissionRequest 拒绝。 依赖：T063、T064。
+- [X] T065 [US4] 在 `src/domain/display-policy.ts`、`src/application/policy-snapshot.ts` 完整实现 Run.policySnapshot 的 revision/progress/final/question/permissionRequest/error/message/toolStatus/artifact/mergeAdjacentProgress，落实原文“默认 progress/final/question/permissionRequest/error=true，message/toolStatus/artifact=false，mergeAdjacentProgress=false。”和“首轮 received 时为预留 Run 固定快照，后续 steer 不改变它；新一轮使用当前配置。”，关闭 question/permissionRequest 拒绝。 依赖：T063、T064。
 
-- [ ] T066 [US4] 在 `src/delivery/assemble.ts` 实现“assembling → complete | invalid”；原文“fragmentIndex 从 0 开始，completed 给出最后索引 N，完整集合必须为 0..N；空消息用 N=-1 且不得有片段。”，同键异序号/内容、同序号异键为冲突；同文本不同身份保留，不依到达顺序重编号，终态尾片段仍接收，不靠沉默超时封口。 依赖：T065。
+- [X] T066 [US4] 在 `src/delivery/assemble.ts` 实现“assembling → complete | invalid”；原文“fragmentIndex 从 0 开始，completed 给出最后索引 N，完整集合必须为 0..N；空消息用 N=-1 且不得有片段。”，同键异序号/内容、同序号异键为冲突；同文本不同身份保留，不依到达顺序重编号，终态尾片段仍接收，不靠沉默超时封口。 依赖：T065。
 
-- [ ] T067 [US4] 在 `src/application/output-projector.ts` 接入 `src/application/events.ts` 的同一 T4 事务，原子保存控制状态、片段、选择/隐藏原因、outbox 及游标；“logicalSequence 在逻辑消息开始时分配”，较后消息不越过未封口消息，已证不可补齐则 invalid 后放行，final 被隐藏不误报失败或无内容。 依赖：T066。
+- [X] T067 [US4] 在 `src/application/output-projector.ts` 接入 `src/application/events.ts` 的同一 T4 事务，原子保存控制状态、片段、选择/隐藏原因、outbox 及游标；“logicalSequence 在逻辑消息开始时分配”，较后消息不越过未封口消息，已证不可补齐则 invalid 后放行，final 被隐藏不误报失败或无内容。 依赖：T066。
 
-- [ ] T068 [US4] 在 `src/delivery/merge-progress.ts` 实现仅明确配置允许时合并相邻未尝试的完整 progress，保存有序 logicalMessageIds；原文“不跨 final、问题、权限或错误合并，不改变已经发送的消息。”，合并超限保留原消息逐条发送，不能用合并掩盖多条能力未验证。 依赖：T067。
+- [X] T068 [US4] 在 `src/delivery/merge-progress.ts` 实现仅明确配置允许时合并相邻未尝试的完整 progress，保存有序 logicalMessageIds；原文“不跨 final、问题、权限或错误合并，不改变已经发送的消息。”，合并超限保留原消息逐条发送，不能用合并掩盖多条能力未验证。 依赖：T067。
 
 - [ ] T069 [US4] 仅在 T031 的分类/片段/完成证据满足后，在 `src/adapters/workbuddy-experimental/output.ts` 将厂商事件归一化为明确用户可见类型和可靠消息/片段身份，按验证边界处理历史与实时流交叠；无可靠身份/分类时报告 output_unsupported，不转发内部思考或假装符合 US4。 真实门槛：G-H-OUTPUT。 依赖：T031、T033、T063、T067。
 
-- [ ] T070 [US4] 在 `src/delivery/output-scheduling.ts` 将组装/过滤/合并后的逻辑消息交给 US2 的原目标顺序/限额调度器；每条/每次尝试保留关联，进度失败耗尽后 final 可继续，unknown 不越序；加入 `tests/integration/multi-output-delivery.test.ts` 验证合并与重试/过期组合。 依赖：T068。
+- [X] T070 [US4] 在 `src/delivery/output-scheduling.ts` 将组装/过滤/合并后的逻辑消息交给 US2 的原目标顺序/限额调度器；每条/每次尝试保留关联，进度失败耗尽后 final 可继续，unknown 不越序；加入 `tests/integration/multi-output-delivery.test.ts` 验证合并与重试/过期组合。 依赖：T068。
 
-- [ ] T071 [US4] 在 `src/config/reload.ts`、`src/application/policy-snapshot.ts`、`src/main.ts` 实现接受新一轮前整体校验并读取最新策略，失败保留旧有效配置并报告安全原因；当前 Run 和其 steer 始终原快照，不新增可静默隐藏人工请求的入口。 依赖：T065、T070。
+- [X] T071 [US4] 在 `src/config/reload.ts`、`src/application/policy-snapshot.ts`、`src/main.ts` 实现接受新一轮前整体校验并读取最新策略，失败保留旧有效配置并报告安全原因；当前 Run 和其 steer 始终原快照，不新增可静默隐藏人工请求的入口。 依赖：T065、T070。
 
-- [ ] T072 [US4] 在 `tests/integration/output-recovery.test.ts` 验证 T4 提交前后崩溃、可靠事件重播不重复 outbox、逻辑消息顺序缺口、同正文不同片段与最终片段恢复；断言隐藏所有普通输出仍正确维护问题/权限/错误和执行终态，且不补发成功消息。 依赖：T067、T068、T070、T071。
+- [X] T072 [US4] 在 `tests/integration/output-recovery.test.ts` 验证 T4 提交前后崩溃、可靠事件重播不重复 outbox、逻辑消息顺序缺口、同正文不同片段与最终片段恢复；断言隐藏所有普通输出仍正确维护问题/权限/错误和执行终态，且不补发成功消息。 依赖：T067、T068、T070、T071。
 
-- [ ] T073 [US4] 执行 US4 契约与 Q-15 至 Q-18、输出恢复测试，将 3/1/2/0 计数、顺序、快照及能力限制结果写入 `specs/001-dingtalk-conversation/verification/us4.md`；重跑受影响的 US2 投递和 US3 人工控制测试，模拟与真实结果分别记录。 依赖：T063、T064、T065、T066、T067、T068、T070、T071、T072。
+- [X] T073 [US4] 执行 US4 契约与 Q-15 至 Q-18、输出恢复测试，将 3/1/2/0 计数、顺序、快照及能力限制结果写入 `specs/001-dingtalk-conversation/verification/us4.md`；重跑受影响的 US2 投递和 US3 人工控制测试，模拟与真实结果分别记录。 依赖：T063、T064、T065、T066、T067、T068、T070、T071、T072。
 
 
 **检查点**：US4 独立输出场景通过，四个故事的核心链路齐备；真实多消息/类型能力仍须最终实际验收。
@@ -272,11 +272,11 @@ T075 只组合已满足各适配器门槛的入口；其完成后才可满足 G-
 
 **目标**：完成安全边界、实际运行验证及交接，真实测试保持显式启用，未通过项不能通过文档勾选绕过。
 
-- [ ] T074 在 `src/storage/private-state.ts`、`tests/integration/privacy.test.ts` 核对私有目录/备份/凭据引用、日志与共享导出脱敏、备份一致性和保留边界；落实原文“备份必须使用 SQLite 一致性备份方式；不能单独复制活动数据库而漏掉 WAL。”，所有新增日志与样例使用合成数据，禁止宣称未实现的存储加密。 依赖：T073。
+- [X] T074 在 `src/storage/private-state.ts`、`tests/integration/privacy.test.ts` 核对私有目录/备份/凭据引用、日志与共享导出脱敏、备份一致性和保留边界；落实原文“备份必须使用 SQLite 一致性备份方式；不能单独复制活动数据库而漏掉 WAL。”，所有新增日志与样例使用合成数据，禁止宣称未实现的存储加密。 依赖：T073。
 
 - [ ] T075 在 `tests/integration/live-conversation.test.ts`、`src/main.ts` 完成真实适配组合与显式手动启用的端到端验收入口，默认测试运行绝不发真实消息；绑定正常配置的测试账号、钉钉会话与 Harness 会话，按有效性规则逐项读取所需适配器证据，保留 OTO/查询不可用的正确限制分支，不用 fake 替代真实结果。 真实门槛：G-H、G-H-INTERACTION、G-H-OUTPUT、G-D、G-D-OTO（允许已证不可用的限制分支）；本任务完成后才为 T077 提供 G-INTEGRATION 的组合证据，本任务不执行真实总验收。 依赖：T033、T034、T035、T047、T048、T059、T069、T074。
 
-- [ ] T076 使用实际 package.json 提供的安装/编译/类型检查/测试命令运行完整离线检查，在 `specs/001-dingtalk-conversation/verification/offline.md` 记录 Q-01 至 Q-21、各崩溃窗口、输入/执行/投递计数与测试命令；测试失败则修复对应模块并只重跑受影响范围，不能把 Spec Kit 检查当应用检查。 依赖：T074。
+- [X] T076 使用实际 package.json 提供的安装/编译/类型检查/测试命令运行完整离线检查，在 `specs/001-dingtalk-conversation/verification/offline.md` 记录 Q-01 至 Q-21、各崩溃窗口、输入/执行/投递计数与测试命令；测试失败则修复对应模块并只重跑受影响范围，不能把 Spec Kit 检查当应用检查。 依赖：T074。
 
 - [ ] T077 在真实测试操作已获对应授权且环境就绪时执行 `tests/integration/live-conversation.test.ts`，将 SC-001 至 SC-009、37 个验收场景及 V-01 至 V-05 的版本/覆盖/实际结果写入 `specs/001-dingtalk-conversation/verification/live.md`；覆盖两用户、正常重启、及时 steer、权限往返、多输出和异常；未执行/失败/阻塞不得标 passed，也不修改真实应用权限绕过阻塞。 真实门槛：G-INTEGRATION。 依赖：T075、T076。
 
@@ -460,3 +460,20 @@ US3 **11**、US4 **11**、最终阶段 **7**。其中 **32** 项标记 `[P]`，
 全部任务当前均为未完成。执行前后未发现 `.specify/extensions.yml`，
 没有可调度的 before_tasks/after_tasks 钩子。本次完成的是任务文件的格式、依赖和覆盖检查，
 不是应用构建、单元测试、能力实验或真实集成验收。
+
+## 2026-11-05 实施交接
+
+T001–T030、T036–T046、T049–T058、T060–T068、T070–T074、T076 已完成，共 66 项。
+干净 `npm ci` 后编译/类型检查通过，72 个应用行为测试通过；编译后应用行覆盖 89.36%。
+各故事的初始行为失败和实际计数见 verification/us1.md 至 us4.md，最终离线结果见 verification/offline.md。
+
+以下 14 项保持未勾选，不能通过模拟或文档勾选绕过：
+
+- T031：已核实桌面 WorkBuddy 5.6.2 并临时启动本机诊断，但正常账户查询未跑通，未提交 Harness 任务；完整独立实验工具和 G-H/G-H-INTERACTION/G-H-OUTPUT 尚未完成。
+- T032：已有显式启用的仅入站探测入口；操作者提供 .env 后真实 Stream 连接及 1 条带标识私聊已观察，聊天发送为零。重投作用域、限额、多消息及过期路径仍缺证。
+- T033–T035、T047–T048、T059、T069：依赖上述准入，未创建未经验证的真实适配器。
+- T075、T077：真实组合与总验收未执行；只提供一名真实测试用户时，多用户隔离仍不能完整验收。
+- T078–T080：仅写入阶段性能力矩阵和交接说明，因真实验收依赖未满足，最终复核任务保留未完成。
+
+当前默认测试不连接真实账号；真实 serve 明确拒绝启动。requirements.md 的 16 个原始清单标记未修改。
+无提交、推送、发布、部署或真实钉钉应用配置修改。
