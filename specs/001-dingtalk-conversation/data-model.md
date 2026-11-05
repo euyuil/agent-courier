@@ -4,6 +4,22 @@
 所有 ID 为不透明字符串；本地 ID 使用随机 UUID，不依赖正文、用户名或路径生成。
 时间保存 UTC 时间戳，另以数据库分配的序号排序，不能用时间戳代替消息身份。
 
+术语遵循 [术语与命名](../../README.md#术语与命名)。CourierSession 保存本地路由与策略，
+HarnessBinding 保存到 Harness 实例及 Harness 会话的绑定；它们不构成 Courier 自有的 Agent 执行上下文。
+
+## 标识所属层
+
+| 字段或引用 | 归属与含义 |
+| --- | --- |
+| PlatformConversation.id | Courier 本地的平台会话记录 ID |
+| PlatformConversation.platformConversationId / Recipient.platformConversationId | 平台提供的原始会话标识；钉钉适配器中来自 conversationId，须与平台范围及机器人共同解释 |
+| CourierSession.platformConversationId / InboundInput.platformConversationId / PendingInput.platformConversationId | 指向本地 PlatformConversation.id，不能直接填入钉钉原始 conversationId |
+| CourierSession.id / HarnessBinding.courierSessionId | 本地 Courier 会话 ID；后者引用前者 |
+| HarnessBinding.harnessSessionId | 指定 Harness 实例内的 Harness 会话标识；不是 CourierSession.id |
+| Run.id / Run.harnessRunRef | 前者为 Courier 的运行记录 ID，后者为 Harness 的运行标识；一条 Harness 会话可先后承载多个 Run |
+
+保留现有字段名；描述和引用时使用限定到实体的名称，不能因字段末尾同为 SessionId 或 ConversationId 就混用。
+
 ## 实体与关系
 
 | 实体 | 主要字段 | 关系与验证规则 |
@@ -18,7 +34,7 @@
 | InboundInput | id, dedupNamespace, originalMessageId, platformConversationId, identityId, receivedSequence, textRef, mode, runId?, pendingInputId?, status, acceptedAt?, appliedEvidenceRef?, errorCode? | UNIQUE(dedupNamespace, originalMessageId)；命名空间必须经 V-05 验证；mode=start/steer/answer/invalid；相同正文新 ID 保留 |
 | InboundReceipt | id, inputId?, transportMessageId, receivedAt, ackStatus | 保留推送尝试与业务输入的区别；重投只关联原输入；群消息只计匿名统计，不保存正文 |
 | HarnessOperation | id, bindingId, inputId?, runId?, pendingInputId?, kind, expectedRunRef?, status, startedAt?, resultCode?, evidenceRef? | kind=create/load/start/steer/answer；对外调用前保存意图；operationId 不自动具有远端幂等性 |
-| Run | id, courierSessionId, bindingId, initialInputId, harnessRunRef?, status, revision, policySnapshot, completionEvidenceRef?, startedAt?, finishedAt? | 每会话最多一个未决任务；steer 关联同一 Run；终态与投递状态无关 |
+| Run | id, courierSessionId, bindingId, initialInputId, harnessRunRef?, status, revision, policySnapshot, completionEvidenceRef?, startedAt?, finishedAt? | 每个 Courier 会话最多一个未决任务；steer 关联同一 Run；终态与投递状态无关 |
 | PendingInput | id, runId, bindingId, platformConversationId, vendorRequestId, sourceMessageId, kind, publicCode, promptRef?, answerSchema?, options?, adapterMappingRef, validity, answerStatus, answerInputId?, revision | kind=question/permission；UNIQUE(bindingId, runId, vendorRequestId) 及 UNIQUE(runId, sourceMessageId)；publicCode 在同私聊历史范围不复用；原消息关联、问题字段模式与选项映射持久化，重启不重新猜测 |
 | HarnessEvent | id, bindingId, runId, sourceEventKey, eventType, sequence?, payloadRef, processedAt | sourceEventKey 必须有可靠来源；无可靠重投标识时不能声称可以恢复重放整个流 |
 | OutputMessage | id, runId, sourceMessageId, kind, userVisible, logicalSequence, completeness, selected, hiddenReason?, contentRef | UNIQUE(runId, sourceMessageId)；kind=progress/final/question/permission_request/error/message/tool_status/artifact；未知类型仅安全诊断 |
@@ -74,8 +90,8 @@ question 或 permissionRequest=false 为无效配置；error 默认 true，关�
 ### 绑定与操作
 
 - Binding：`reserved → creating → ready`；明确失败为 `blocked`，创建结果未知为 `unknown`。
-  已知会话 ID 不清空；`ready → unavailable/writer_conflict/unknown` 后只能恢复原绑定。
-  查询证据证明会话仍可用才回到 ready；不自动创建替代会话。
+  已知 Harness 会话 ID 不清空；`ready → unavailable/writer_conflict/unknown` 后只能恢复原绑定。
+  查询证据证明原 Harness 会话仍可用才回到 ready；不自动创建替代 Harness 会话。
 - Operation：`prepared → dispatching → accepted | rejected | unknown`。
   每次调用在 dispatching 落盘后才开始网络请求；超时/断连/进程中断不推导 rejected。
   unknown 仅凭权威查询变为 accepted/rejected；没有核实手段就保持 unknown。
@@ -91,7 +107,7 @@ question 或 permissionRequest=false 为无效配置；error 默认 true，关�
 - Run：`submitting → running ↔ waiting_input → completed | failed`；
   活动状态因失联可进入 `unknown`，仅在可靠核实后恢复活动或进入终态。
   初始提交明确未接收为 `not_started`，不能标成 Agent 执行失败。
-  `submitting/running/waiting_input/unknown` 均占用该会话唯一活动槽。
+  `submitting/running/waiting_input/unknown` 均占用该 Courier 会话唯一活动槽。
 - `waiting_input` 仍允许受验证支持的 steer。有效人工答复优先转交；
   一个请求被答复不代表全部请求完成，须按仍有效的待答集合与 Harness 状态归约。
 - 最终文本可以早于 completed；连接关闭、无可见输出或全部过滤不能产生终态。
@@ -153,7 +169,7 @@ question 或 permissionRequest=false 为无效配置；error 默认 true，关�
 1. **T1 入站**：私聊唯一映射/接收人校验、可靠去重记录和必要限制提示 outbox 原子提交，再 ACK。
    同 ID 不同正文属于异常，不视为新输入；保留原记录并安全诊断。不能修复成正文去重。
 2. **T2 转交准备**：读取最新绑定/任务 revision，预留 Run 或 PendingInput，写 Operation 和 input 状态。
-   提交事务并释放短锁后才调用网络；等待整轮输出不能占住同会话锁。
+   提交事务并释放短锁后才调用网络；等待整轮输出不能占住同一 Courier 会话的锁。
 3. **T3 接收确认**：将 Operation、Input、Run 的确认一起保存；事件先于确认到达时按已登记关联归并。
    无法可靠关联的事件不能猜给“当前”任务，记录适配限制。
    晚到 accepted 只补充接收事实，不能把 completed/failed 回退为 running，
@@ -170,11 +186,11 @@ question 或 permissionRequest=false 为无效配置；error 默认 true，关�
 
 ## 恢复、保留与隐私
 
-正常停止后恢复原绑定、策略及明确任务终态，下一轮仅 load 原会话。
+正常停止后恢复原绑定、策略及明确任务终态，下一轮仅 load 原 Harness 会话。
 数据库损坏或关联不完整时停止相关路由，输出安全原因，不删库重建冒充恢复。
 运行中不能自动判断的输入、人工答复和发送均保留 unknown，且后续无法安全处理的输入明确失败。
 
-首版不自动删除去重键、请求编号、操作确认和会话关联；否则旧消息重投可能再次执行。
+首版不自动删除去重键、请求编号、操作确认和三层会话映射；否则旧消息重投可能再次执行。
 清理正文可另行设计，但必须保留必要 tombstone，不能清理成可重放状态。
 状态库/日志/备份均为本地私有材料，目录限制为当前运行账号访问且不进入 Git。
 备份必须使用 SQLite 一致性备份方式；不能单独复制活动数据库而漏掉 WAL。

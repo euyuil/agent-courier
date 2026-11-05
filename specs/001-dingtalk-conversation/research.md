@@ -2,7 +2,7 @@
 
 **日期**：2026-11-05 | **依据**：[规格](spec.md)、[项目原则](../../.specify/memory/constitution.md)
 
-本次只读取仓库、官方资料与安装包代码；未登录、连接或执行真实 Harness 任务，未发送钉钉消息。
+本次只读取仓库、官方资料与安装包代码；未登录、连接或执行真实 Harness 中的 Agent 任务，未发送钉钉消息。
 三项并行研究分别覆盖 Harness、钉钉和本地持久化。研究前宪章检查无冲突。
 以下决策消除实施方案的选型歧义；V-01 至 V-05 是真实能力准入检查，仍未关闭。
 
@@ -71,7 +71,7 @@
   所需授权有效且企业用户映射可靠后启用。每次只允许原接收人的单元素 `userIds`。
   未验证或不可用时保留发送限制，不改发其他对话。
 - **Rationale**：官方模型包含 `robotCode/userIds/msgKey/msgParam`，没有 `conversationId`
-  或调用方幂等键，故“能发给用户”不能推导“与原会话相同”。
+  或调用方幂等键，故“能发给用户”不能推导“与原钉钉会话相同”。
   `processQueryKey` 可能只在成功响应中取得；已读查询不能证明超时请求未发送。
 - **Alternatives considered**：不改用工作通知、最近联系人或其他机器人；不以查询不到已读记录作为补发依据。
 - **来源**：[官方生成 SDK 的 BatchSendOTO](https://pkg.go.dev/github.com/alibabacloud-go/dingtalk@v1.7.46/robot_1_0#BatchSendOTORequest)、
@@ -85,9 +85,9 @@
 - **Rationale**：本次安装包静态检查为 Linux 桌面 WorkBuddy **5.6.2**、随包 CLI **2.147.0**。
   这仅是当前检查版本，不是最新版保证。历史实验只证明部分续接与写入冲突行为。
   CodeBuddy 公开 ACP/HTTP 文档描述独立 CLI；WorkBuddy 本地助理公开接口未提供足够证据证明
-  本规格要求的独立会话与运行中 steer，不能推定品牌间共享认证和会话。
+  本规格要求的独立 Harness 会话与运行中 steer，不能推定产品间共享认证和 Harness 会话。
 - **Alternatives considered**：公开本地助理 REST 保留为后续可替换路径；独立 CLI、云端任务
-  不冒充桌面会话；不调查 DeepSeek Harness；不要求用户为未知能力猜答案。
+  不冒充桌面 WorkBuddy 的 Harness 会话；不调查 DeepSeek Harness；不要求用户为未知能力猜答案。
 - **来源**：[CodeBuddy ACP](https://www.codebuddy.cn/docs/cli/acp)、
   [CodeBuddy HTTP API](https://www.codebuddy.cn/docs/cli/http-api)、
   [WorkBuddy Open API](https://open.workbuddy.cn/docs/openapi)、[历史实验](../../README.md)。
@@ -95,7 +95,7 @@
 ## R-07：steer 的静态证据和准入条件
 
 - **Decision**：适配器必须提供独立的快速 `steer` 操作，携带期望原任务标识；
-  分别保存接收确认和实际生效证据。不得用排队、取消重启或新建会话替代。
+  分别保存接收确认和实际生效证据。不得用排队、取消重启或新建 Harness 会话替代。
   真实验证失败则该适配器不满足本规格，停止其准入，保留核心模拟验证结果。
 - **Rationale**：包内 `session/steer` 校验活动任务与 `expectedRequestId`，把输入放入当前任务缓冲；
   `RunnerFactory.injectSendNowItems` 在后续模型请求前消费并写入当前轮。

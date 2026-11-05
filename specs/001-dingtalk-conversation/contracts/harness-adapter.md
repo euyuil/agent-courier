@@ -1,5 +1,10 @@
 # Harness 适配器契约 v1
 
+术语遵循 [术语与命名](../../../README.md#术语与命名)。本契约中的 `sessionRef` 指当前 Harness 实例内的
+Harness 会话引用，对应绑定中的 `harnessSessionId`；`courierSessionId` 则是本地 Courier 会话 ID。
+`runRef`/`expectedRunRef` 指 Harness 运行标识，`clientRunId` 指 Courier 的 `Run.id`，两侧标识不能互换。
+`session/*` 保留厂商协议原名；连接、订阅和 Harness 会话各有独立生命周期，断开连接不等于 Harness 会话或 Run 已结束。
+
 这是待实现的应用端口，不是 WorkBuddy 的公开 API 保证。
 应用路由不得读取厂商 JSON-RPC、运行端点或进程状态；适配器不得执行 Courier 自有 Agent 循环。
 关联与状态定义见 [data-model.md](../data-model.md)，研究证据见 [research.md](../research.md)。
@@ -12,8 +17,8 @@ limitations。探测本身不登录、不创建任务、不夺取写入权。
 
 | 必需能力 | 通过条件 |
 | --- | --- |
-| isolatedSessions | 不同 Courier 私聊有独立 Harness 上下文 |
-| createAndResume | 可创建会话；正常 Courier 重启后 load 原会话并续接 |
+| isolatedSessions | 不同 Courier 会话绑定独立的 Harness 会话及执行上下文 |
+| createAndResume | 可创建 Harness 会话；正常 Courier 重启后 load 原 Harness 会话并续接 |
 | writerOwnership | 可区分可写、冲突与未知，冲突不强占；交接方式有实测依据 |
 | timelySteer | 在声明的运行状态（包括等待人工输入）中影响当前任务后续工作；非排队、非取消后重启 |
 | inputCorrelation | 能将 start/steer/answer 的确认与本地操作、原任务关联，区分未知结果 |
@@ -32,7 +37,7 @@ limitations。探测本身不登录、不创建任务、不夺取写入权。
 | --- | --- | --- |
 | probe | instanceId | 无副作用探测，返回上述能力报告 |
 | createSession | operationId, courierSessionId | 返回新 sessionRef 或明确拒绝/未知；初次创建预留必须持久化 |
-| resumeSession | operationId, sessionRef | 仅恢复指定原会话，返回可用性/写入权；不得替换 |
+| resumeSession | operationId, sessionRef | 仅恢复指定原 Harness 会话，返回可用性/写入权；不得替换 |
 | start | operationId, inputId, sessionRef, text, clientRunId | 注册本轮命令；接收确认及运行事件异步返回，不等待整轮完成才释放路由 |
 | steer | operationId, inputId, sessionRef, expectedRunRef, text | 必须指向活动原任务；接收确认不代表实际消费 |
 | answer | operationId, inputId, sessionRef, runRef, vendorRequestId, answer | 只转交该请求的文本或明确决定，不新增角色判定 |
@@ -42,7 +47,7 @@ limitations。探测本身不登录、不创建任务、不夺取写入权。
 
 每个修改操作快速返回本地 command handle；其 receipt 异步解析为：
 
-- `accepted`：包含可靠的 session/run/request 关联与 receiptEvidence；不代表执行完成或 steer 已生效。
+- `accepted`：包含可靠的 Harness 会话、运行任务和原请求关联与 receiptEvidence；不代表执行完成或 steer 已生效。
 - `rejected`：包含 errorCode、`definitelyNotAccepted=true` 和安全说明；没有该证明不能返回 rejected。
 - `unknown`：保留原关联和安全原因，不能重试为新操作。
 
@@ -97,9 +102,9 @@ fragmentIndex 归一化为从 0 连续递增；finalFragmentIndex=N 时须收齐
 
 ## steer 与完成竞态
 
-1. 用原会话 revision 和原 runRef 登记操作，再释放短锁调用 steer。
+1. 用原 Harness 绑定与运行任务的 revision 和原 runRef 登记操作，再释放短锁调用 steer。
 2. 若原任务已结束且 Harness 明确未接收，记录 rejected/stale_run；
-   不以 start 重新提交该条、不另开会话、不要求正常运行中的所有用户消息稍后重发。
+   不以 start 重新提交该条、不另开 Harness 会话、不要求正常运行中的所有用户消息稍后重发。
 3. 若已接收，保持同一 Run，不因客户端稍后看到终态而再提交。
 4. 若接收未知，先核实；新的普通输入无法安全转交时记录具体阻塞，不构建输入恢复队列。
 5. 人工答复不与普通 steer 共用“当前最近请求”推断；其原请求在并发 steer 中失效时明确拒绝。
@@ -110,7 +115,7 @@ fragmentIndex 归一化为从 0 连续递增；finalFragmentIndex=N 时须收齐
 `writer_occupied`、`capability_unverified`、`steer_unsupported`、`steer_rejected`、`stale_run`、
 `request_invalid`、`interaction_blocked`、`output_unsupported`、`state_unknown`。
 每项包含输入是否明确未接收/已接收/未知、安全原因和下一步；
-不把底层 exception、路径、凭据、其他会话内容或运行端点直接发给用户。
+不把底层 exception、路径、凭据、其他 Harness 会话内容或运行端点直接发给用户。
 
 写入权恢复只允许在原 sessionRef 上继续；首版不提供强制抢占或关闭其他客户端的方法。
 普通输入不支持或失效为真实错误，不能发送例行“忙碌，请等待”回执来代替转交。

@@ -36,12 +36,14 @@
 ## 拟议 CLI
 
 下列名称是待实现接口约定。当前仓库不能运行这些命令，也没有对应构建/测试脚本。
+`status --session` 选择的是 Courier 会话，其值为本地 `CourierSession.id`，不是钉钉 `conversationId`
+或 `HarnessBinding.harnessSessionId`；状态 JSON 的 `session` 字段也使用同一层的 ID。
 
 | 命令形式 | 语义 | 副作用边界 |
 | --- | --- | --- |
 | `courier validate-config --config <CONFIG>` | 校验结构、策略与静态证据引用；安全错误输出 | 不登录、不执行任务、不发送消息 |
 | `courier serve --config <CONFIG>` | 打开状态库、检查单实例、恢复关联、连接已配置平台/适配器 | 仅处理真实收到且通过检查的输入；不自动重放旧操作 |
-| `courier status --config <CONFIG> --session <LOCAL_SESSION_ID> --json` | 查询本地输入、执行、请求、投递及能力限制 | 只读，默认脱敏，不输出真实平台身份/正文/路径/URL |
+| `courier status --config <CONFIG> --session <COURIER_SESSION_ID> --json` | 查询指定 Courier 会话的本地输入、执行、请求、投递及能力限制 | 只读，默认脱敏，不输出真实平台身份/正文/路径/URL |
 | `courier reconcile --config <CONFIG> --operation <LOCAL_OPERATION_ID>` | 通过已验证只读查询核实一项 unknown，并保存得到的证据 | 不 start/steer/answer/send；查询不支持则保持 unknown |
 | `courier reconcile --config <CONFIG> --delivery <LOCAL_DELIVERY_ID>` | 核实未知投递，保存原尝试的权威结果，解除已解决的顺序阻塞 | 不补发；serve 下次启动只对已核实可重试且预算未耗尽的投递继续调度 |
 
@@ -56,7 +58,7 @@ reconcile 会更新本地证据，必须在 serve 停止后取得同一互斥锁
 可采用由 SQLite 独立锁文件数据库持有的生命周期排他事务作为同机互斥，
 与业务状态数据库分离；仅锁库持有长事务，业务事务保持短小。
 异常退出由文件锁释放互斥，不能留下需要盲目删除的 PID 锁。
-退出只断开 Courier 自有连接，不擅自取消 Harness 正在运行的任务。
+退出只断开 Courier 自有连接，不擅自取消 Harness 中正在执行的 Agent 任务。
 
 ## 安全状态输出
 
@@ -64,7 +66,7 @@ reconcile 会更新本地证据，必须在 serve 停止后取得同一互斥锁
 
 ```json
 {
-  "session": "session-example",
+  "session": "courier-session-example",
   "input": {"id": "input-example", "mode": "steer", "status": "unknown"},
   "execution": {"id": "run-example", "status": "running"},
   "pendingInputCount": 0,
