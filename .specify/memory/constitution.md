@@ -1,50 +1,124 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Agent Courier 项目原则
 
-## Core Principles
+## 核心原则
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. 中转职责与 Agent 执行分离
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Agent Courier 必须负责接收钉钉消息和外部事件、关联会话与任务、转交输入，
+并向正确的接收人投递回复、主动通知和人工交互请求。
+推理、模型调用、工具执行以及任务所需的本地文件和执行环境访问必须由 Harness 负责。
+不得在 Agent Courier 中实现 agent loop 或工具执行器。
+这一边界使消息中转能够服务于可替换的 Harness。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. 平台、路由与 Harness 适配边界
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+- 平台收发负责平台连接、消息格式与发送路径；应用路由必须独立于钉钉和 Harness 的传输细节。
+- Harness 适配器负责能力探测、会话交互和厂商事件归一化。
+  厂商特有的进程发现、激活、重连及生命周期控制必须封装在适配器内部。
+- 公开协议和有文档的接口能够满足需求时，必须优先使用；
+  内部 SDK、Electron IPC 和诊断端点等实验手段必须标明限制，
+  不得未经说明就作为受支持的生产接口。
+- 必须从已验证需求所需的最小适配器契约开始扩展，并明确报告不支持的操作。
+  不得因品牌或协议相同，就推定桌面产品、云端 API 与独立 CLI 共享凭据、会话或能力。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. 会话关联、重复处理与写入权
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- 必须分别建模平台身份、接收人、平台会话、Agent Courier 会话、Harness 实例与会话、
+  运行任务、入站事件、待处理人工输入和出站投递，避免跨用户或跨群串会话。
+- 外部事件必须明确接收人，以及新建会话还是续接指定会话；不得根据最近一次聊天猜测目标。
+  主动联系用户的发送路径必须能够在没有近期用户消息时工作。
+- 必须明确处理重复输入和事件重试，避免重复执行同一操作。
+  出站投递重试只重试发送，不得自动重新执行 Harness 任务。
+- 续接必须使用对应的 Harness 会话；不支持或续接失败时必须明确报告，
+  不得悄悄新建会话冒充续接。
+- 必须显式处理桌面客户端与 Agent Courier 之间的会话写入权。
+  内部串行化不能替代跨客户端的控制权交接；`writer_occupied` 等冲突必须有明确处理。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. 人工输入与授权归属
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+提问与授权请求必须保留原任务、原会话及待处理输入的标识，
+用户的回答或授权决定必须返回对应请求。
+不得为了让流程继续而自动批准 Harness 的权限请求。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+提问和授权请求必须默认保留。
+禁用其用户可见投递时，必须明确其他人工交互路径，否则拒绝该配置；
+不得静默丢弃请求后让任务无限等待，也不得将消息过滤视为授权决定。
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+### V. 输出展示与任务控制分离
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- 必须支持一次输入产生多条用户可见输出，并按配置过滤 Harness 明确提供的输出类型。
+  厂商事件的类型映射由适配器负责，不得仅根据文本内容猜测进度、最终回答或完成状态。
+- 过滤只决定内容是否进入用户投递，不能改变必要的状态更新、任务完成判断或权限控制。
+  被隐藏的输出不得被解释为任务结束。
+- 必须区分持久化历史、流式消息与任务完成信号；握手成功或进程已连接不代表任务完成。
+- 必须区分逻辑消息与增量片段。出站层负责片段合并、按配置合并进度、限速和必要的顺序，
+  并逐条记录投递状态与重试结果，不得把每个增量片段直接当作独立消息发送。
+- 错误必须默认保留；提问与授权请求的投递还必须满足第四项原则。
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+### VI. 本机信息、用户隐私与凭据保护
+
+- 仓库文件和共享输出必须去除机器特有信息与本地用户信息，包括真实用户名、主机名、
+  home 目录、其他本机绝对路径、内网地址、设备标识、运行时端点、本机配置、
+  账号或配置档案标识，以及个人文件名与内容。
+  文档、示例、日志、截图、工具输出、报错和文件链接均适用。
+- 示例必须使用相对路径、可配置参数或未展开的 `$HOME`、`~`、`<USER_HOME>` 等占位符，
+  不得替换成真实用户目录；不得硬编码原机器的路径、进程 ID、端口、用户或认证状态。
+- 登录 URL、OAuth state、访问令牌、IPC ticket、运行时密钥、账号配置、
+  私有日志和个人截图不得进入 Git。
+  必须使用正常的登录和凭据配置流程，不得将提取进程内存或环境中的凭据视为已授权的适配方式。
+- 临时诊断端点必须限制为本机测试用途，并在测试结束后关闭。
+  系统依赖和安全策略必须按目标环境评估，不得将其他机器上的授权视为通用授权。
+
+### VII. 能力声明必须有对应证据
+
+- 必须区分设计目标、模拟事件、本地实验、真实 Harness 验证、真实钉钉集成、部署和未验证行为。
+  实验结论必须记录日期、产品版本与验证范围，不能将单一版本结果当作普遍兼容性保证，
+  也不能把本地可行性实验描述为完整产品验收。
+- 对真实 Harness 能力的结论必须有已登录状态下的真实测试支持，
+  只有实测支持的能力才可声明为受支持并对上层开放。
+- 钉钉单轮多消息投递必须验证多次发送行为、条数与频率限制，以及回复地址过期后的发送路径。
+  不得假定同一 `sessionWebhook` 只能发送一次或可以无限发送；
+  单次实验只能证明其覆盖的条件，不能据此推断平台上限。
+- 行为尚不支持或证据不足时必须说明限制。
+  实验、设计决策或实现改变了支持行为时，必须更新交接文档，保留版本和验证边界。
+
+## 适用范围与表达约定
+
+本文依据仓库的 `README.md` 与 `AGENTS.md` 整理长期约束，适用于用户对话和外部事件触发的中转流程。
+具体场景、接口与验收细节由相应功能规格记录；本原则不选定实现语言、依赖管理工具、
+数据库、应用入口或部署方式，不新增开发流程，也不要求同时实现所有候选协议。
+
+桌面 WorkBuddy 是首个已调查目标，其带日期的实验记录不要求固定安装对应版本。
+DeepSeek Harness 的接口与会话能力仍待另行安排调查，不得将 DeepSeek 模型 API 自动当作该 Harness。
+
+文档、代码注释和面向用户的说明必须遵循中文优先约定；
+产品名称、协议名称、API 标识符和必要的技术术语保留原有写法，确保准确。
+
+## 验证与仓库操作
+
+实现相应行为时，验证必须覆盖会话路由与用户隔离、重复事件处理、写入权冲突、
+投递重试、待处理输入关联、输出过滤、单轮多消息、片段合并及必要的输出顺序。
+常规检查优先使用测试用 Harness；涉及真实能力声明时，必须按第七项原则补充对应证据。
+不得编造尚不存在的构建或测试命令。
+
+变更必须聚焦已授权的任务阶段。创建文档或初始化仓库不构成实现、发布、推送、部署
+或修改真实钉钉应用的授权；提交规则本身也不构成提交授权。
+获准提交时，提交信息必须遵循 Conventional Commits，使用 `type(scope): 描述` 格式，
+其中 `scope` 可省略，`type` 使用英文类型，描述和正文可以使用中文。
+汇报必须说明实际改动、验证结果与尚未确定的事项。
+
+## 修订与一致性
+
+修订必须说明修改内容、依据及对已有规格或支持行为的影响，并更新版本和最近修订日期。
+首次制定日期在后续修订中保持不变。版本使用语义化版本号：
+
+- 主版本：删除原则，或对原则作出不兼容的重新定义。
+- 次版本：新增原则或章节，或实质性扩展约束。
+- 修订版本：不改变约束含义的澄清、措辞与错字修正。
+
+评审需求、方案与实现时必须核对相关原则，明确指出冲突与证据缺口，
+不得把未满足约束或未经验证的行为报告为已支持。
+若行为或约束发生变化，必须同步相关规格与交接文档，避免与 `README.md`、`AGENTS.md` 相互矛盾。
+这些要求不新增审批层级、固定分支策略或未约定的测试与部署流程。
+
+**版本**：1.0.0 | **首次制定**：2026-11-05 | **最近修订**：2026-11-05
