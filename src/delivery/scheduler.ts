@@ -6,7 +6,7 @@ const busy=new WeakMap<Runtime,Set<string>>();
 export async function flushDeliveries(ctx:Runtime):Promise<void> {
   let running=busy.get(ctx);if(!running){running=new Set();busy.set(ctx,running);}
   const recipients=ctx.db.prepare("SELECT DISTINCT recipientId FROM outbound_deliveries WHERE status IN ('pending','retry_wait')").all() as {recipientId:string}[];
-  await Promise.all(recipients.map(async({recipientId})=>{
+  const settled=await Promise.allSettled(recipients.map(async({recipientId})=>{
     if(running.has(recipientId))return;running.add(recipientId);
     try {
       for(;;) {
@@ -17,4 +17,6 @@ export async function flushDeliveries(ctx:Runtime):Promise<void> {
       }
     } finally {running.delete(recipientId);}
   }));
+  // 一条私聊失败后仍等待本批其他已开始的投递，避免关闭遗漏其网络结果与落盘。
+  for(const result of settled)if(result.status==='rejected')throw result.reason;
 }

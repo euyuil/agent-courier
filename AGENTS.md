@@ -7,6 +7,11 @@
 Agent 在 Harness 中推理并执行任务；模型调用、工具执行和本地环境访问由 Harness 提供和管理。不要把 Agent Courier 实现成另一个 Agent。
 
 仓库已包含首个私聊功能的离线通用核心、SQLite 迁移、CLI、mock/fake 适配器和行为测试。
+另有未准入的 WorkBuddy ACP/钉钉适配器、独立能力探测及显式真实观察入口；默认测试不运行真实入口。
+WorkBuddy 独立实验已观察登录、消息标识、显式终态、原生问答及释放后恢复原 Harness 会话；
+当前 149 项离线测试通过；两条补充在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别于原任务内生效已有独立观察。idle/stale 与斜杠拒绝、控制连接故障注入后的 unknown 及私有库重开不再次派发也有独立观察；同进程对象重建不等于 Courier 重启验收，完整运行状态覆盖、权限往返及输出分类仍缺证。
+2026-11-06 已在本版本独立复现：首次 ACP session/new 初始化自有启动 Harness 会话后，同一连接再次显式新建取得不同标识，并能执行、断连及恢复原上下文。已知标识仍不能覆盖原 Courier 关联；正常发现/激活与生命周期、桌面持有的原 Harness 会话写入权交接和完整接入仍未准入。详见 specs/001-dingtalk-conversation/verification/interface-research-2026-11-06.md。
+另已修复 ACP 问题能力握手声明；原始 ACP 原生单选题、答案明确接收及原 Run 续行已有独立复现，不等于完整执行权限往返或真实钉钉验收。
 真实适配与验收仍受 `specs/001-dingtalk-conversation/plan.md` 的门槛限制；未准入时不开放真实 serve。
 实际命令为 `npm ci`、`npm run build`、`npm run typecheck`、`npm test`、`npm run test:coverage`；
 状态库和私有配置须在 Git 外。当前支持边界与结果见该功能的 `verification/`。

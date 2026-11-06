@@ -30,9 +30,14 @@ export async function receive(ctx: Runtime, event: NormalizedInbound): Promise<A
     if (existing) {
       duplicate=true; input=existing.input;
       if (existing.conflict) ctx.diagnostics.push({code:'protocol_conflict',localId:input.id});
+      else {
+        const conversation=ctx.db.prepare('SELECT recipientId FROM platform_conversations WHERE id=?').get(input.platformConversationId) as {recipientId:string};
+        ctx.persistInbound?.(event,conversation.recipientId);
+      }
     } else {
       const {conversation,identity} = platformRecords(ctx.db,event);
       recipientId=conversation.recipientId;
+      ctx.persistInbound?.(event,recipientId);
       const courier=reserveCourierSession(ctx.db,conversation.id,ctx.config.harness.instanceId,policy.revision); courierId=courier.id;
       const row=ctx.db.prepare('UPDATE courier_sessions SET nextInputSequence=nextInputSequence+1,revision=revision+1 WHERE id=? RETURNING nextInputSequence-1 AS n').get(courier.id) as {n:number};
       input={id:newId<'input'>(),dedupNamespace:event.dedupNamespace!,originalMessageId:event.originalMessageId!,platformConversationId:conversation.id,

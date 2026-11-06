@@ -4,14 +4,23 @@ Agent Courier 是一个连接钉钉与不同 Harness（Agent 运行系统）的�
 
 **本项目不实现 Agent 本身。** Agent 在 Harness 中执行任务；模型调用、工具执行、本地文件访问和执行环境由接入的 Harness 提供和管理。
 
-当前状态：001 的通用核心已实现并通过 mock Harness / fake 平台的离线验证。真实 WorkBuddy 与钉钉适配仍受能力准入限制，尚无真实钉钉端到端集成、发布或部署。
+当前状态：001 的通用核心及未准入的真实适配器代码已写入，149 项离线测试通过。
+
+WorkBuddy 独立实验已观察正常登录、文本任务终态、原生问题答复、原 Harness 会话恢复与原始 ACP 连接。
+连续两条补充已在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别观察到原任务内生效；完成后 idle 拒绝及运行中斜杠文本拒绝也有独立样本。
+另已观察不匹配预期 Run 的 stale 拒绝，以及本次控制连接故障注入后保留 unknown、私有 SQLite 重开及对象重建不再次派发。
+
+完整运行状态覆盖、权限往返、输出分类等必需能力仍缺证，真实服务保持关闭，尚无真实钉钉端到端集成、发布或部署。
+2026-11-06 的[接口补充调查](specs/001-dingtalk-conversation/verification/interface-research-2026-11-06.md)已找到并复现：显式初始化自有启动 Harness 会话后，再新建不同的 Harness 会话，可通过生产 ACP 适配器执行、断连并恢复原上下文。
+另已修复 ACP 握手缺少问题能力声明的缺陷；原始 ACP 原生单选题、一次答案明确接收和原 Run 续行已独立复现，完整权限往返仍未验证。
+真实适配仍需正常发现/激活与生命周期、桌面持有的原 Harness 会话写入权交接，以及可靠输出分类/片段身份/消息结束契约。继续条件见[实现复核](specs/001-dingtalk-conversation/verification/implementation-review.md)；不能以模拟通过或配置修改替代这些前提。
 
 首个功能的[规格](specs/001-dingtalk-conversation/spec.md)与
 [实施计划](specs/001-dingtalk-conversation/plan.md)限定为文本私聊、持续上下文、运行中及时 steer、
 人工问答与单轮多输出。2026-11-05 落地 TypeScript、Node.js 24 LTS 和 SQLite 单包实现，
 包含持久路由、人工输入、输出组装、投递和本地 CLI。离线结果见
-[验证记录](specs/001-dingtalk-conversation/verification/offline.md)。安装包静态检查发现 WorkBuddy 的 steer 接收与同轮消费路径，
-但未完成已登录真实验证，不能据此声明满足该功能。平台限额和真实能力准入见
+[验证记录](specs/001-dingtalk-conversation/verification/offline.md)与[适配器实现边界](specs/001-dingtalk-conversation/verification/adapter-implementation.md)。WorkBuddy 运行中 steer 的接收与注入回执已有独立真实观察，
+后续输出的厂商运行标识变化已通过匹配注入回执及原 messageRequestId 建立受限映射；这些独立样本不能证明完整必需能力，不能据此声明满足该功能。平台限额和真实能力准入见
 [研究记录](specs/001-dingtalk-conversation/research.md)与[验证指南](specs/001-dingtalk-conversation/quickstart.md)。
 
 ## 离线运行与检查
@@ -41,8 +50,11 @@ mock Harness 的上下文在 CLI 进程退出后消失；持久 Courier 关联�
 `status --session <COURIER_SESSION_ID> --json` 只读展示本地状态与可核实的本地操作/投递 ID；
 `reconcile` 必须停服取得同锁，mock 跨进程缺少查询权威时返回 5 并保留 unknown。
 
-真实模式会明确拒绝启动，配置布尔值不能绕过准入。钉钉有单独的、显式启用的入站探测入口，
-它只监听并 ACK，不发送聊天消息；使用方法及剩余边界见[验证指南](specs/001-dingtalk-conversation/quickstart.md)。
+真实组合入口在注册 Stream 监听前检查能力，当前目标仍会被拒绝；配置布尔值不能绕过准入。
+fake 与真实组合均在处理入站前重新读取配置，当前 Run 及其 steer 保留原展示策略；新一轮使用新策略，读取或校验失败保留上一份有效配置，并向操作者的 stderr 输出脱敏说明。
+钉钉独立探测默认只监听并 ACK；另加 `--send-three` 才向匹配合成标记的原私聊尝试三条消息。
+WorkBuddy 独立探测及真实观察入口也必须显式启用；使用方法见[验证指南](specs/001-dingtalk-conversation/quickstart.md)。
+早期仅一次 ACP 新建的实验回传桌面启动标识，被本地关联冲突保护拦截；新增 `--acp-bootstrap-owned-run` 已独立复现显式启动初始化后的不同 Harness 会话创建、执行及原上下文恢复，完整准入仍未通过。
 
 ## 术语与命名
 

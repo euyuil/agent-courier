@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { rig } from '../fixtures/rig.js';
 import { request } from '../fixtures/interaction.js';
 import type { OutputKind } from '../../src/adapters/harness/events.js';
+import { writeFileSync,unlinkSync } from 'node:fs';
+import { dirname,join } from 'node:path';
+import { loadConfig } from '../../src/config/load.js';
 test('Q-15 the four progress/final policies produce 3/1/2/0 ordinary outputs with the same completion',async()=>{
   for(const [progress,final,count] of [[true,true,3],[false,true,1],[true,false,2],[false,false,0]] as const){const r=rig();try{
     r.courier.runtime.config.display.defaults.progress=progress;r.courier.runtime.config.display.defaults.final=final;
@@ -22,6 +25,45 @@ test('Q-17 merge only adjacent unattempted progress; the active Run keeps its po
     await r.courier.accept(r.platform.inbound('next round'));const nextRun=state.activeRun!;
     r.harness.message(ref,nextRun,'final','hidden final');r.harness.complete(ref);await r.courier.flush();assert.equal(r.platform.visible.length,2);
     assert.equal(r.courier.reload({...next,display:{defaults:{question:false}}}),false);
+  }finally{await r.dispose();}
+});
+test('the input boundary rereads configuration while keeping the active Run policy and applying changes to the next Run',async()=>{
+  const r=rig(),file=join(dirname(r.config.storage.databasePath),'config.json');let reads=0;
+  try {
+    writeFileSync(file,JSON.stringify(r.config),{mode:0o600});
+    r.courier.runtime.readConfig=()=>{reads++;return loadConfig(file);};
+    await r.courier.accept(r.platform.inbound('first round'));
+    const [ref,state]=[...r.harness.sessions][0]!,firstRun=state.activeRun!;
+    const next=structuredClone(r.config);next.display.defaults.progress=false;next.display.defaults.revision=2;
+    writeFileSync(file,JSON.stringify(next),{mode:0o600});
+    await r.courier.accept(r.platform.inbound('steer after configuration edit'));
+    assert.equal(r.courier.runtime.config.display.defaults.revision,2);
+    r.harness.message(ref,firstRun,'progress','original-progress');r.harness.message(ref,firstRun,'final','original-final');r.harness.complete(ref);
+    await r.courier.flush();
+    await r.courier.accept(r.platform.inbound('next round'));
+    const nextRun=state.activeRun!;
+    r.harness.message(ref,nextRun,'progress','hidden-progress');r.harness.message(ref,nextRun,'final','next-final');r.harness.complete(ref);
+    await r.courier.flush();
+    assert.equal(reads,3);assert.equal(r.harness.count('steer'),1);assert.equal(r.harness.count('create'),1);
+    assert.deepEqual(r.platform.visible.map(item=>item.payload),['original-progress','original-final','next-final']);
+  }finally{await r.dispose();}
+});
+test('configuration read failures, invalid human settings and changed targets retain the last valid configuration with safe diagnostics',async()=>{
+  const r=rig(),file=join(dirname(r.config.storage.databasePath),'config.json');let notifications=0;
+  try {
+    writeFileSync(file,JSON.stringify(r.config),{mode:0o600});r.courier.runtime.readConfig=()=>loadConfig(file);
+    r.courier.runtime.onConfigReloadFailure=()=>{notifications++;throw new Error('SYNTHETIC_PRIVATE_LOGGER_DETAIL');};
+    await r.courier.accept(r.platform.inbound('first round'));
+    const changedTarget=structuredClone(r.config);changedTarget.harness.instanceId='synthetic-other-target';
+    for(const content of ['SYNTHETIC_PRIVATE_CONFIG_DETAIL',JSON.stringify({...r.config,display:{defaults:{question:false}}}),JSON.stringify(changedTarget),undefined]) {
+      if(content===undefined)unlinkSync(file);else writeFileSync(file,content,{mode:0o600});
+      assert.equal((await r.courier.accept(r.platform.inbound('steer with failed reload'))).status,'accepted');
+      assert.equal(r.courier.runtime.config.harness.instanceId,r.config.harness.instanceId);
+      assert.equal(r.courier.runtime.config.display.defaults.question,true);
+    }
+    assert.equal(r.harness.count('create'),1);assert.equal(r.harness.count('steer'),4);
+    assert.equal(notifications,4);
+    assert.deepEqual(r.courier.runtime.diagnostics,[{code:'configuration_invalid'},{code:'configuration_invalid'},{code:'configuration_invalid'},{code:'configuration_invalid'}]);
   }finally{await r.dispose();}
 });
 test('Q-18 hidden ordinary output still permits questions, permissions, errors and real control states',async()=>{

@@ -13,7 +13,8 @@ export function selectRoute(ctx:Runtime,recipient:Recipient):{route?:DeliveryRou
     if(route.expiresAt!==undefined && route.expiresAt<=ctx.clock.now())continue;
     const raw=ctx.db.prepare('SELECT * FROM capability_evidence WHERE id=?').get(route.capabilityEvidenceId);
     const evidence=decode<CapabilityEvidence>(raw);
-    if(!evidence || !evidenceValid(evidence,{kind:'fake',productVersion:'1',adapterVersion:'1',contextFingerprint:platformFingerprint(ctx.config,route.verifiedLimits)},ctx.clock.now(),route.kind==='oto'?'oto':'delivery'))continue;
+    const target=ctx.config.platform.kind==='fake'?{kind:'fake' as const,productVersion:'1',adapterVersion:'1',contextFingerprint:platformFingerprint(ctx.config,route.verifiedLimits)}:ctx.platformEvidenceTarget;
+    if(!target || !evidence || !evidenceValid(evidence,target,ctx.clock.now(),route.kind==='oto'?'oto':'delivery'))continue;
     const budget=routeBudget(ctx,recipient,route);
     if(budget.available)return {route};
     if(budget.nextAt!==undefined)nextAt=Math.min(nextAt??Infinity,budget.nextAt);

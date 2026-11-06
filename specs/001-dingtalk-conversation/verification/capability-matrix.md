@@ -1,24 +1,24 @@
 # 阶段性能力矩阵
 
-日期：2026-11-05。这是缺口登记，不是 T078 的最终验收结果；T077 尚未完成，T078 保持未勾选。
-mock Harness/适配器版本均为 1；fake 平台版本 1。WorkBuddy 桌面版本 5.6.2，真实适配器未创建；钉钉 SDK 2.1.5。
+日期：2026-11-06。这是缺口登记，不是 T078 的最终验收结果；T077 尚未完成，T078 保持未勾选。
+mock Harness/适配器版本均为 1；fake 平台版本 1。WorkBuddy 桌面版本 5.6.2，实验适配器代码版本 1，未准入；钉钉 SDK 2.1.5。
 上下文与指纹使用临时别名，未输出真实指纹、原身份或端点。
 
 | 能力 | 模拟验证范围 | 真实结果/当前有效性 |
 | --- | --- | --- |
-| isolatedSessions | 两私聊独立 Harness 会话与接收人 | blocked / unverified |
-| createAndResume | 保留外部 fake Harness 的 Courier 重启 | blocked / unverified |
-| writerOwnership | 写入冲突不接管、只恢复原绑定 | blocked / unverified |
-| timelySteer | running/waiting_input 当前 Run 内实际消费；拒绝排队/延后消费 | blocked / unverified |
-| inputCorrelation | 快速 handle、accepted/applied、晚确认与冲突 | blocked / unverified |
-| explicitCompletion | 可靠终态独立于文本和流关闭 | blocked / unverified |
-| typedVisibleOutput | 3/1/2/0 策略、未知内容隔离 | blocked / unverified |
-| messageAssembly | 0..N、N=-1、乱序、重投、正常重复、尾片段与冲突 | blocked / unverified |
-| humanInteraction | 问答/批准/拒绝、原映射、未知与撤销恢复 | blocked / unverified |
+| isolatedSessions | 两私聊独立 Harness 会话与接收人；新建回复复用已知标识时不覆盖原关联 | 已观察单个独立真实目录；显式初始化自有启动 Harness 会话后，第二个新建 RPC 取得不同标识并实际执行；两用户/并发隔离未验证，整体 unverified |
+| createAndResume | 保留外部 fake Harness 的 Courier 重启 | 独立桌面 API 已释放后加载原 Harness 会话并复述上下文；新 ACP 创建路径也已正常断连/load 并复述原上下文；Courier 重启链路仍 unverified |
+| writerOwnership | 写入冲突不接管、只恢复原绑定 | 桌面原 Harness 会话 load 返回 writer_occupied，正常 requestYield 被拒；新的自有 ACP Harness 会话可执行及正常断连恢复，但不证明桌面原写入权交接；整体 unverified |
+| timelySteer | running/waiting_input 当前 Run 内实际消费；拒绝排队/原任务结束后才消费；候选真实适配器已合成验证原 Run 注入回执及晚确认 | 两条补充在 running（含同文不同本地输入 ID）、受控长工具、问题待答及受控报告后期均已观察原任务内生效；另有 idle/stale、斜杠拒绝及自有连接故障注入 unknown 样本。权限等待、完整重连/恢复及其他时序/整条链路仍缺证，整体 blocked / unverified |
+| inputCorrelation | 快速 handle、accepted/applied、晚确认与冲突；已核验注入边和原 messageRequestId 同时约束输出，后续控制使用当前厂商 owner | 连续两条 running steer 及同文不同输入 ID 均已观察独立操作/消费回执和原提交内输出；故障注入 unknown 在私有 SQLite 重开及对象重建后没有增加 RPC/POST，但不等于跨进程恢复。完整状态和恢复范围仍缺证，整体 blocked / unverified |
+| explicitCompletion | 可靠终态独立于文本和流关闭 | 真实文本任务有 stopReason、isProcessing=false；另有完成后控制明确 idle 拒绝、约 5.2 秒观察无新工作样本；完整终态/竞态仍 unverified |
+| typedVisibleOutput | 3/1/2/0 策略、未知内容隔离 | 独立样本未观察到 progress/final 文本分类；执行阶段/进度控制不是逐文本分类依据，当前代码强制 unverified |
+| messageAssembly | 0..N、N=-1、乱序、重投、正常重复、尾片段与冲突 | 真实样本有 messageId；稳定片段身份及独立结束边界未验证，代码强制 unverified |
+| humanInteraction | 问答/批准/拒绝、原映射、未知与撤销恢复；原工具关联、双通道合并、原调用明确 receipt | 正常桌面原生问题与待答 steer 已有独立观察；修复问题能力握手后，原始 ACP 单选题、一次答案明确接收及原 Run 续行也已复现。执行权限、恢复及完整 Courier/钉钉链路仍缺证，代码强制 unverified |
 | inspectOperation | fixture 可为指定操作提供权威只读证据；默认不宣称通用查询支持 | not_tested / unverified |
 | replayEvents | 合成可靠事件重投幂等；缺身份不声称重播 | not_tested / unverified |
 | serverIdempotency | 未依赖远端幂等；unknown 停止重放 | not_tested / unverified |
-| 平台 ingress / 原始 ID 范围 | 合成独立推送/原始 ID 与跨重启去重；真实连接及 1 条带标识私聊已观察 | 单样本观察；重投稳定性/作用域 not_tested，整体 unverified |
+| 平台 ingress / 原始 ID 范围 | 合成独立推送/原始 ID 与跨重启去重；真实连接及 1 条带标识私聊、新 SDK worker 连接/关闭已观察 | 单样本观察；真实持久登记后 ACK 与重投稳定性/作用域 not_tested，整体 unverified |
 | 平台 delivery / 多消息 / 限额 | 合成作用域预算、顺序、重试、unknown | not_tested / unverified |
 | 同私聊 OTO | 没有证据即拒绝备用路径 | not_tested / unverified；未宣称存在备用路径 |
 | 平台 inspectDelivery | 三种有/无权威查询结果 | not_tested / unverified |
@@ -27,4 +27,7 @@ mock Harness/适配器版本均为 1；fake 平台版本 1。WorkBuddy 桌面版
 真实必需能力尚无 passed 证据，因此 checkedAt/expiresAt/invalidatedAt 均无可登记的当前有效通过记录。
 not_tested/blocked 对应 CapabilityEvidence.outcome=unverified，不能当作 passed。
 启动、重载/重连及每次新副作用检查版本、上下文、期限、撤销和当前探测；fake 证据只用于 fake。
-真实 serve 目前直接拒绝，故不能由手工改时间戳或配置 true 取得支持声明。
+真实 serve 在依赖组合的准入检查中拒绝当前目标；真实模式不会生成 fake 证据或合成投递路由。手工改时间戳、配置 true 或伪填 passed 不能覆盖适配器明确保留的 unverified 能力。
+
+实现范围及尚未完成的协议映射见 adapter-implementation.md。OTO/权威查询的代码分支明确禁用，不能把“禁用”写成平台已被实验否定。
+具体调用入口、原子 steer、输出信号及官方平台文档的限制见 protocol-gaps.md；代码中的候选消费回执不自动产生 passed 证据。

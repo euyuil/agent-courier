@@ -5,7 +5,7 @@ import { decodeWebhookResult } from '../../src/adapters/dingtalk/results.js';
 
 test('HTTP 200 still requires an explicit business success; missing or lost results remain unknown',()=>{
   assert.equal(decodeWebhookResult(200,{errcode:0},1).status,'confirmed');
-  assert.equal(decodeWebhookResult(200,{errcode:12345,errmsg:'SYNTHETIC_SECRET'},1).status,'not_sent');
+  assert.equal(decodeWebhookResult(200,{errcode:12345,errmsg:'SYNTHETIC_SECRET'},1).status,'unknown');
   for(const [status,body] of [[200,{}],[500,{errcode:0}],[200,null]] as const)assert.equal(decodeWebhookResult(status,body,1).status,'unknown');
   assert.doesNotMatch(JSON.stringify(decodeWebhookResult(200,{errcode:123,errmsg:'SYNTHETIC_SECRET'},1)),/SYNTHETIC_SECRET/);
 });

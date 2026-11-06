@@ -1,22 +1,21 @@
-import { readFileSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { configSchema, type Config } from './schema.js';
 import { CourierError } from '../domain/errors.js';
-
-export function resolveReference(configPath: string, reference: string): string {
-  return isAbsolute(reference) ? reference : resolve(dirname(configPath), reference);
-}
+import { resolveReference } from './reference.js';
+import { privateFile } from './private.js';
+export { resolveReference } from './reference.js';
 export function loadConfig(path: string): Config {
   try {
     const config = configSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
     config.storage.databasePath = resolveReference(path, config.storage.databasePath);
     if (config.platform.kind !== 'fake') {
-      if((statSync(path).mode&0o077)!==0)throw new CourierError('configuration_invalid');
+      privateFile(path,resolve(path));
       for (const reference of [config.platform.clientIdRef, config.platform.clientSecretRef, config.platform.limitProfileRef,
         config.platform.otoRouteEvidenceRef, config.harness.connectionProfileRef, config.harness.capabilityEvidenceRef]) {
         if (!reference) continue;
-        const info = statSync(resolveReference(path, reference));
-        if (!info.isFile() || (info.mode & 0o077) !== 0) throw new CourierError('configuration_invalid');
+        if((reference===config.platform.clientIdRef||reference===config.platform.clientSecretRef)&&/^env:[A-Z][A-Z0-9_]*$/.test(reference))continue;
+        privateFile(path,reference);
       }
     }
     return config;

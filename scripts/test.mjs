@@ -8,7 +8,7 @@ const root = 'build/test/tests';
 function discover(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const path = join(dir, entry.name);
-    return entry.isDirectory() ? discover(path) : entry.name.endsWith('.test.js') ? [path] : [];
+    return entry.isDirectory() ? discover(path) : entry.name.endsWith('.test.js') && entry.name!=='live-conversation.test.js' ? [path] : [];
   });
 }
 let files;
