@@ -7,6 +7,8 @@ import type { Receipt } from '../../src/adapters/harness/port.js';
 import { safeCode } from '../../src/domain/errors.js';
 import { ownRuntimeEndpoints,identifyOwnAcpTransport } from './workbuddy-acp.js';
 import { acpQuestionExperiment } from './workbuddy-acp-question.js';
+import { acpPermissionDenialExperiment } from './workbuddy-acp-permission.js';
+import { summarizeClassicHooks } from './workbuddy-classic-hooks.js';
 
 interface Diagnostic {evaluate(expression:string,timeout?:number):Promise<unknown>}
 export async function initializeOwnedBootstrap(connection:Pick<AcpConnection,'call'>,cwd:string,bootstrap:string):Promise<'matched'|'identity_mismatch'|'unknown'|'invalid'> {
@@ -21,7 +23,9 @@ export function freshOwnedSession(receipt:unknown,bootstrap:string):string|undef
   return bootstrap&&value['status']==='accepted'&&session&&session!==bootstrap?session:undefined;
 }
 const summary=(receipt:Receipt)=>({status:receipt.status,...(receipt.status==='accepted'?{}:{code:receipt.errorCode})});
-export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,initializeBootstrap=false,exerciseQuestion=false):Promise<Record<string,unknown>> {
+export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,options:{initializeBootstrap?:boolean;exerciseQuestion?:boolean;
+  exercisePermission?:boolean;observeHooks?:boolean}={}):Promise<Record<string,unknown>> {
+  const {initializeBootstrap=false,exerciseQuestion=false,exercisePermission=false,observeHooks=false}=options;
   const bootstrap=await diagnostic.evaluate(`(async()=>{const p=globalThis.__courierCapabilityProbe;if(typeof p?.sessionId!=='string')return;
     const s=await globalThis.__wbInvoke('session:get',{},p.sessionId);
     return !s?.__wbError&&s?.sessionId===p.sessionId&&s?.cwd===${JSON.stringify(cwd)}&&s?.isProcessing===false?p.sessionId:undefined;})()`);
@@ -91,7 +95,7 @@ export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,in
       return {status:receipt.status,completion:end?.eventType==='run.completed'&&end.runRef===receipt.runRef?'completed':
         end?.eventType==='run.failed'?'failed':end?.eventType==='input.requested'?'unexpected_human_input':'unverified',
         rawPromptStop:rawStops.get(operationId)??'not_observed',markerObserved:bounded&&[...messages.values()].some(body=>body.includes(marker)),
-        toolCallFrames:toolFrames-beforeTools};
+        toolCallFrames:toolFrames-beforeTools,...(observeHooks?{hookObservation:summarizeClassicHooks(cwd,owned!,receipt.runRef!,marker)}:{})};
     }finally{clearTimeout(timer);unsubscribe();}
   };
   try {
@@ -111,7 +115,7 @@ export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,in
     if(firstRun.status!=='accepted'||firstRun.completion!=='completed'||firstRun.rawPromptStop!=='end_turn'||!firstRun.markerObserved||toolFrames!==0)
       return finish({status:'first_task_unverified',newSessionDistinct:true,firstRun});
     await first.disconnect('independent-owned-acp');
-    const {adapter:second}=build();await second.connect();
+    const {adapter:second,connection:resumedConnection}=build();await second.connect();
     const resumed=await second.resumeSession({operationId:randomUUID(),sessionRef:owned}).receipt;
     if(resumed.status!=='accepted')return finish({status:'resume_unverified',newSessionDistinct:true,firstRun,resume:summary(resumed)});
     const continuation=await run(second,'Without using tools, reading files or contacting the network, reply only with the exact synthetic context marker '+
@@ -119,8 +123,10 @@ export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,in
     const contextRoundtripObserved=continuation.status==='accepted'&&continuation.completion==='completed'&&
       continuation.rawPromptStop==='end_turn'&&continuation.markerObserved&&toolFrames===0;
     const questionObservation=exerciseQuestion?(contextRoundtripObserved?await acpQuestionExperiment(second,owned):{status:'skipped_incomplete_original_task'}):undefined;
+    const permissionObservation=exercisePermission?(contextRoundtripObserved?await acpPermissionDenialExperiment(second,resumedConnection,owned):
+      {status:'skipped_incomplete_original_task'}):undefined;
     return finish({status:'observed',newSessionDistinct:true,firstRun,resume:summary(resumed),continuation,contextRoundtripObserved,
-      ...(questionObservation?{questionObservation}:{})});
+      ...(questionObservation?{questionObservation}:{}),...(permissionObservation?{permissionObservation}:{})});
   }catch(error){return finish({status:'unavailable',code:safeCode(error)});}
   finally{await Promise.allSettled(adapters.map(adapter=>adapter.disconnect('independent-owned-acp')));}
 }

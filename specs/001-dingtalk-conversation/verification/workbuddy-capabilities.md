@@ -5,6 +5,8 @@
 
 2026-11-06 补充：显式初始化自有启动 Harness 会话后，同一 ACP 连接再次新建取得不同标识；生产适配器执行、正常断连/load 和原上下文恢复均已独立复现。早期首次新建被冲突保护拦截的样本保留，但不能扩大为不存在独立 ACP 执行路径；见本文末尾及[接口补充调查](interface-research-2026-11-06.md)。
 同日另修复问题能力握手；原始 ACP 单选题、一次答案明确接收和原 Run 输出所选标签已由显式入口独立复现。完整权限与恢复链路仍缺证。
+后续原始 ACP 拒绝实验已观察一次 deny 明确接收及原 Run cancelled；未观察到工具取消标记，不编造。生产 cancelled 待答撤销已修复；见本文末尾和[拒绝记录](permission-denial-2026-11-06.md)。
+普通 Hook 已另行观察原 Run、Stop 完整正文和 completed 的 FinalStop；转录在 Stop 时可能尚未持久化本轮回答，分类与片段仍缺证，见 [Hook 调查](hook-output-2026-11-06.md)。
 
 | 项目 | 实际结果 | 准入含义 |
 | --- | --- | --- |
@@ -422,3 +424,27 @@ failureBoundariesObserved=true 只描述这组有界实验。正常生产发现/
 权限请求与执行权限批准均为 0；83 个可见帧仍没有 progress/final 分类或片段身份。
 此前临时独立驱动也观察相同问答路径，仓库入口再次复现用于消除临时封装依赖。
 这只证明本版本上的原始 ACP 单选问答及续行，不能关闭完整执行权限、待答恢复或 Courier/钉钉人工往返任务。
+
+## 2026-11-06：原始 ACP 执行权限拒绝
+
+新增显式 `--acp-bootstrap-owned-denial`，仅在自有目录配置 Bash ask 并核对本次 Harness 会话 mode=default，经过独立创建/恢复及上下文检查后请求一次合成打印命令。
+只有原工具/Run、完整命令及可见拒绝选项匹配才答一次 deny；生产 receipt=accepted，原 operation/input 的 input.accepted 和原始 prompt.stopReason=cancelled 均已观察，归一为 run.failed。
+未观察到额外工具 ID；执行权限批准为 0。57 个可见帧仍没有可靠类型或片段身份。
+
+本机 handleResolveInterruption 的非问题 deny 分支直接 reject 原工具并终止 Run；该路径未观察到工具 permission_denied 取消标记或权限错误正文，两者保持 false。
+原生工具取消帧来自另一 interrupt_result 路径，不能凭期待补造。两个早期探测样本继续保留 unverified；最终按原生拒绝契约另行独立运行，没有重放旧操作。
+这只证明一次拒绝明确接收及原 Run 取消，不是完整权限批准、撤销/重连或 Courier/钉钉验收。
+
+另修复适配器漏处理有效 tool_call_update.status=cancelled 的待答撤销；同一原工具的问题/权限取消只撤销一次，不确认答案，外来工具、错误 Run 和成员帧不能借用当前关联。
+具体前提、RPC response 观察修正和五项拒绝保护测试见 permission-denial-2026-11-06.md。
+
+## 2026-11-06：普通 Hook 与输出来源
+
+新增显式 `--acp-bootstrap-owned-hooks`，仅在自有私有目录准备观察脚本和 Hook 配置，不返回决定、不读环境或转录内容；原生身份和正文只保留摘要。
+仓库入口在首轮和正常恢复后的续聊中，各观察到原 Harness 会话和 generation_id 匹配的 UserPromptSubmit、Stop、FinalStop；Stop 正文摘要匹配预期合成回答，FinalStop 原因为 completed。
+两组匹配 Hook 均为 3 条；身份字段只有 session_id/generation_id，没有 session 对象、逻辑消息或片段身份。session RPC new=2、load=1、prompt=2，57 个 ACP 可见帧，零工具和权限批准。
+
+另一次限定已创建 Harness 会话、同名普通文件的只读转录元数据实验发现：续聊 Stop 时只有旧回答，到 FinalStop 才出现本轮完整 assistant 记录；generation 可区分相同正文的新旧回答。
+记录有 id、completed 和 providerData.messageId/conversationRequestId，但被检查的进度/最终语义字段未出现。本次只验证 ID 存在，没有把它扩大为跨 Run 唯一性通过。
+当前安装包未见新版 Mods 加载入口，不将最新 CLI 文档或服务网关代理当作本机原生事件接口。
+完整输出桥接尚未实现/准入；详细字段、持久化时序及边界见 hook-output-2026-11-06.md。

@@ -15,6 +15,7 @@ import { ownedSessionExperiment } from './workbuddy-owned.js';
 import { toolSteerExperiment } from './workbuddy-tool-steer.js';
 import { completedSteerExperiment } from './workbuddy-completed-steer.js';
 import { failureBoundariesExperiment } from './workbuddy-failures.js';
+import { configureClassicHookObservation } from './workbuddy-classic-hooks.js';
 import { randomUUID } from 'node:crypto';
 
 const launchSchema=z.strictObject({executable:z.string().min(1),args:z.array(z.string()).default([]),virtualDisplay:z.boolean().default(false)});
@@ -71,24 +72,25 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
     twice=args.includes('--steer-running-twice')||sameText,slash=args.includes('--steer-slash'),near=args.includes('--steer-near-completion'),
     steer=args.includes('--steer-running')||twice||slash||near,
     waitingTwice=args.includes('--steer-waiting-twice'),waiting=args.includes('--steer-waiting')||waitingTwice,
-    ownedQuestion=args.includes('--acp-bootstrap-owned-question'),bootstrapOwned=args.includes('--acp-bootstrap-owned-run')||ownedQuestion,
+    ownedQuestion=args.includes('--acp-bootstrap-owned-question'),ownedDenial=args.includes('--acp-bootstrap-owned-denial'),
+    ownedHooks=args.includes('--acp-bootstrap-owned-hooks'),bootstrapOwned=args.includes('--acp-bootstrap-owned-run')||ownedQuestion||ownedDenial||ownedHooks,
     owned=args.includes('--acp-owned-run')||bootstrapOwned,
     toolSteer=args.includes('--steer-long-tool'),completedSteer=args.includes('--steer-after-completion'),
     failures=args.includes('--steer-failure-boundaries'),
     handoff=args.includes('--acp-handoff'),processDiscovery=args.includes('--acp-process-surface')||handoff,
     acp=args.includes('--acp-surface')||processDiscovery,exercise=args.includes('--exercise')||question||resume||acp||permissionDenial||steer||waiting||owned||toolSteer||completedSteer||failures;
-  const flags=args.filter(arg=>!['--exercise','--question','--question-interruption','--resume','--acp-surface','--acp-process-surface','--acp-handoff','--acp-owned-run','--acp-bootstrap-owned-run','--acp-bootstrap-owned-question','--permission-denial','--steer-running','--steer-running-twice','--steer-same-text','--steer-slash','--steer-near-completion','--steer-waiting','--steer-waiting-twice','--steer-long-tool','--steer-after-completion','--steer-failure-boundaries'].includes(arg));
+  const ownedModes=['--acp-owned-run','--acp-bootstrap-owned-run','--acp-bootstrap-owned-question','--acp-bootstrap-owned-denial','--acp-bootstrap-owned-hooks'];
+  const flags=args.filter(arg=>!['--exercise','--question','--question-interruption','--resume','--acp-surface','--acp-process-surface','--acp-handoff',...ownedModes,'--permission-denial','--steer-running','--steer-running-twice','--steer-same-text','--steer-slash','--steer-near-completion','--steer-waiting','--steer-waiting-twice','--steer-long-tool','--steer-after-completion','--steer-failure-boundaries'].includes(arg));
   if(flags.length!==5||flags[0]!=='--enable-live'||flags[1]!=='--launch-profile'||flags[3]!=='--output'||(acp&&(question||resume))||
     (permissionDenial&&(acp||question||resume))||(steer&&(acp||question||resume||permissionDenial))||(twice&&args.includes('--steer-running'))||
     (slash&&(twice||args.includes('--steer-running')))||
     (near&&(twice||slash||args.includes('--steer-running')))||
     (waiting&&(acp||question||resume||permissionDenial||steer))||(waitingTwice&&args.includes('--steer-waiting'))||
-    (owned&&(acp||question||resume||permissionDenial||steer||waiting))||(bootstrapOwned&&args.includes('--acp-owned-run'))||
-    (ownedQuestion&&args.includes('--acp-bootstrap-owned-run'))||
+    (owned&&(acp||question||resume||permissionDenial||steer||waiting))||args.filter(arg=>ownedModes.includes(arg)).length>1||
     (sameText&&args.includes('--steer-running-twice'))||(toolSteer&&(acp||question||resume||permissionDenial||steer||waiting||owned))||
     (completedSteer&&(acp||question||resume||permissionDenial||steer||waiting||owned||toolSteer))||
     (failures&&(acp||question||resume||permissionDenial||steer||waiting||owned||toolSteer||completedSteer))) {
-    process.stderr.write('需要 --enable-live --launch-profile <私有 JSON> --output <Git 外新文件>；可选 --exercise、--question、--question-interruption、--resume、--acp-surface、--acp-process-surface、--acp-handoff、--acp-owned-run、--acp-bootstrap-owned-run、--acp-bootstrap-owned-question、--permission-denial、--steer-running、--steer-running-twice、--steer-same-text、--steer-slash、--steer-near-completion、--steer-waiting、--steer-waiting-twice、--steer-long-tool、--steer-after-completion、--steer-failure-boundaries。\n');return 2;
+    process.stderr.write('需要 --enable-live --launch-profile <私有 JSON> --output <Git 外新文件>；可选 --exercise、--question、--question-interruption、--resume、--acp-surface、--acp-process-surface、--acp-handoff、--acp-owned-run、--acp-bootstrap-owned-run、--acp-bootstrap-owned-question、--acp-bootstrap-owned-denial、--acp-bootstrap-owned-hooks、--permission-denial、--steer-running、--steer-running-twice、--steer-same-text、--steer-slash、--steer-near-completion、--steer-waiting、--steer-waiting-twice、--steer-long-tool、--steer-after-completion、--steer-failure-boundaries。\n');return 2;
   }
   let child:ChildProcess|undefined,directory:string|undefined,diagnostic:Diagnostic|undefined,reserved=false;
   const report:Record<string,unknown>={kind:'real_workbuddy_experiment',capabilityOutcome:'unverified',exerciseRequested:exercise};
@@ -129,7 +131,13 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
     if(exercise&&account?.authenticated===true) {
       phase='session_create';
       const workspace=join(directory,'workspace');privateDirectory(workspace);
-      const created=await diagnostic.evaluate(`(async()=>{try{const s=await globalThis.__wbInvoke('session:create',{}, {cwd:${JSON.stringify(workspace)}${permissionDenial||toolSteer?",permissionMode:'default'":''}});if(s?.__wbError||typeof s?.sessionId!=='string'||s.cwd!==${JSON.stringify(workspace)})return false;globalThis.__courierCapabilityProbe=s;return true;}catch{return false;}})()`);
+      if(ownedHooks){configureClassicHookObservation(workspace);report['scopedClassicHooksConfigured']=true;}
+      if(ownedDenial) {
+        privateDirectory(join(workspace,'.codebuddy'));
+        writeFileSync(join(workspace,'.codebuddy','settings.local.json'),JSON.stringify({permissions:{ask:['Bash']}}),{mode:0o600,flag:'wx'});
+        report['scopedProjectAskRuleConfigured']=true;
+      }
+      const created=await diagnostic.evaluate(`(async()=>{try{const s=await globalThis.__wbInvoke('session:create',{}, {cwd:${JSON.stringify(workspace)}${permissionDenial||ownedDenial||toolSteer?",permissionMode:'default'":''}});if(s?.__wbError||typeof s?.sessionId!=='string'||s.cwd!==${JSON.stringify(workspace)})return false;globalThis.__courierCapabilityProbe=s;return true;}catch{return false;}})()`);
       report['isolatedSessionCreated']=created===true;
       if(created===true) {
         phase='basic_prompt';
@@ -164,7 +172,8 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
           const basic=observation as {completedNormally?:unknown;isProcessing?:unknown}|undefined;
           phase='acp_owned_session';
           report['ownedSessionObservation']=basic?.completedNormally===true&&basic.isProcessing===false?
-            await ownedSessionExperiment(diagnostic,workspace,bootstrapOwned,ownedQuestion):{status:'skipped_incomplete_original_task'};
+            await ownedSessionExperiment(diagnostic,workspace,{initializeBootstrap:bootstrapOwned,exerciseQuestion:ownedQuestion,
+              exercisePermission:ownedDenial,observeHooks:ownedHooks}):{status:'skipped_incomplete_original_task'};
         }
         if(toolSteer) {
           const basic=observation as {completedNormally?:unknown;isProcessing?:unknown}|undefined;

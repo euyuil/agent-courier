@@ -228,6 +228,11 @@ npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PRO
 `--acp-bootstrap-owned-question` 单独运行，包含上述创建/恢复前提，之后通过生产 ACP 适配器发起一个合成原生单选题。
 仅原 Harness 会话/Run、完整题目/选项和有效待答请求一致时提交一次答案，核对明确 receipt、input.accepted、原 Run end_turn 及真实续行输出；不答执行权限、撤销问题、外来 Run 或不匹配题目，未知答案不重试。
 握手仅声明 question=true 并明确拒绝客户端文件能力，不表示批准执行权限；该入口不代替完整 Courier/钉钉人工往返验收。
+`--acp-bootstrap-owned-denial` 单独运行，包含相同的独立创建/恢复前提；只在本次私有目录配置 Bash ask 规则，并核对原 Harness 会话的 mode=default。
+随后请求一次合成打印命令；原工具/Run、完整命令、原生 interruption 及可见拒绝范围一致才提交一次 deny，核对明确接收、原输入确认及原 Run 取消。
+该原生拒绝分支可能没有工具取消标记，探测分别报告标记是否出现，不凭文本或流关闭补造；unknown 不重试，不批准或替换为其他任务。结果见 verification/permission-denial-2026-11-06.md。
+`--acp-bootstrap-owned-hooks` 单独运行，在本次自有私有目录中配置只观察的普通 Hook，包含独立创建/恢复前提；该入口不读取转录内容或环境，不修改用户设置，也不输出权限决定。
+它只保存原生身份、正文等白名单字段的摘要；匹配本次 Harness 会话/Run、单个 Stop 和 completed 的 FinalStop 才报告这组观察成立。未知字段、不完整记录和重复 Stop 不据此通过；逻辑消息/片段及进度分类仍未准入，见 verification/hook-output-2026-11-06.md。
 `--permission-denial` 单独运行：仅将本次新建的 Harness 会话配置为 default 权限模式，
 请求一个只打印合成标记的 Python 命令，并只对原工具/Run 和完整命令一致的请求提交一次拒绝。
 它不会批准可执行工具或调整全局权限配置，不能与恢复、问题或 ACP 交接实验混用；实际结果见 verification。

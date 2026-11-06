@@ -265,7 +265,7 @@ export class WorkBuddyAdapter implements HarnessPort {
   }
   private resolveControl(session:string,run:ActiveRun,update:Record<string,unknown>):void {
     const resolved=update['sessionUpdate']==='session_info_update'&&metaField(update['_meta'],'permissionResolved')===true;
-    const completed=update['sessionUpdate']==='tool_call_update'&&['completed','failed'].includes(String(update['status']));
+    const completed=update['sessionUpdate']==='tool_call_update'&&['completed','failed','cancelled'].includes(String(update['status']));
     if(!resolved&&!completed)return;
     const tool=string(update['toolCallId'])??string(metaField(update['_meta'],'toolCallId'));
     if(!tool||!run.knownTools.has(tool))return;

@@ -627,3 +627,17 @@ T001–T030、T036–T046、T049–T058、T060–T068、T070–T074、T076 已�
 - 新增 --acp-bootstrap-owned-question，仅在独立创建/恢复及上下文检查通过后，经生产适配器请求合成单选题；原 Harness 会话/Run、题目/选项、请求有效性一致才答一次，核对明确 receipt、input.accepted、原 Run 终态及真正的后续正文，排除问题回显。
 - 仓库显式入口真实复现 new=2、load=1、prompt=3；问题观察、答案 accepted、原操作 input.accepted 和原 Run run.completed/end_turn 均成立，后续正文精确输出所选标签；权限请求及执行权限批准为 0。完整执行权限、待答恢复和 Courier/钉钉链路仍缺证，humanInteraction 保持 unverified。
 - 新增握手回归及三项问答保护测试，完整离线套件 149 项通过、0 失败，build/typecheck 通过，编译后应用行覆盖 3149/3664（85.94%）。整项仍 66/80；未发送钉钉消息或 commit/push/发布/部署，也未要求用户先验收未准入链路。
+
+### 2026-11-06：原始 ACP 拒绝往返与 cancelled 撤销
+
+- T031/T033/T059：新增 --acp-bootstrap-owned-denial，仅在自有目录收紧 Bash ask 并核对本次 Harness 会话 default 模式，完成独立创建/恢复后请求一次合成打印命令；原工具/Run、完整命令、原生路径及可见拒绝范围匹配才提交一次 deny，unknown 不重试。
+- 最终独立真实样本 new=2、load=1、prompt=3；拒绝 receipt=accepted，对应 input.accepted 和原始 cancelled 均已观察，归一为 run.failed，没有额外工具 ID 或权限批准。原生直接 reject 分支没有工具取消标记/权限错误正文，报告保留 false；两个早期样本未改写为通过，详情见 verification/permission-denial-2026-11-06.md。
+- T059：回归先复现适配器漏处理原工具 cancelled 的待答撤销，再修复为问题和权限请求各撤销一次，不确认答案；外来工具、错误 Run、成员帧及重复取消的负面范围一并验证。
+- 新增五项拒绝探测测试及一项生产撤销回归，完整离线套件 155 项通过，build/typecheck 通过，编译后应用行覆盖 3151/3664（86.00%）。完整批准、恢复、输出与正常生命周期仍有缺口，整项仍 66/80，真实服务关闭；本阶段没有 commit/push 或钉钉发送。
+
+### 2026-11-06：普通 Hook 关联与输出持久化时序
+
+- T031/T069：核对官方 Mods 与普通 Hook 文档及本机实现，未将最新 Mods 加载/事件文档直接当成本机支持。新增 --acp-bootstrap-owned-hooks，仅在私有自有目录准备只观察脚本和 Hook 配置，不读环境/转录、不输出决定；原生身份及正文只保存摘要。
+- 仓库入口独立复现：首轮及断连/load 后的续聊，各有与原 Harness 会话/Run 精确匹配的 UserPromptSubmit、Stop、FinalStop；Stop 正文摘要匹配合成回答，FinalStop 原因为 completed。new=2、load=1、prompt=2，零工具/权限批准；Hook 只有 session_id/generation_id，无逐消息/片段字段，ACP 仍无可靠分类。
+- 另一次只读限定本次创建回执所有权及同名普通转录文件的实验显示：续聊 Stop 时还没有本轮完整回答，到 FinalStop 才出现本轮 assistant 身份和 completed 记录。相同正文的新旧回答按 generation 可区分；没有把 ID 存在性扩大为跨 Run 唯一性，也没有猜最后一条或补造分类。详见 verification/hook-output-2026-11-06.md。
+- 新增三项隐私/范围/完整性回归；完整离线套件 158 项通过，build/typecheck 通过，编译后应用行覆盖 3151/3664（86.00%）。输出桥接与正常生命周期仍缺证，整项仍 66/80、真实服务关闭；未新增 commit/push、权限批准或钉钉发送。

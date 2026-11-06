@@ -269,6 +269,30 @@ test('another client resolving the same permission withdraws the request without
     const posts=f.calls.length;await f.adapter.answer({...input,operationId:'retry'}).receipt;assert.equal(f.calls.length,posts);
   }finally{await f.adapter.disconnect('synthetic-instance');}
 });
+test('cancelled original tools withdraw pending questions and permissions without confirming an answer',async()=>{
+  for(const nativeToolName of ['Bash','AskUserQuestion']) {
+    const f=await running('owned-tool');
+    try {
+      f.send({jsonrpc:'2.0',id:71,method:'session/request_permission',params:{sessionId:f.session,
+        toolCall:{toolCallId:'owned-tool',rawInput:nativeToolName==='AskUserQuestion'?{questions:[{question:'Synthetic question?',options:[{label:'A'},{label:'B'}]}]}:{command:'echo synthetic'},
+          _meta:{'codebuddy.ai/toolName':nativeToolName}},options:[{optionId:'reject',kind:'reject_once',name:'Reject'}]}});await tick();
+      const requested=f.events.find(event=>event.eventType==='input.requested');assert.ok(requested?.eventType==='input.requested');
+      for(const update of [
+        {sessionUpdate:'tool_call_update',toolCallId:'foreign-tool',status:'cancelled'},
+        {sessionUpdate:'tool_call_update',toolCallId:'owned-tool',status:'cancelled',_meta:{'codebuddy.ai/requestId':'foreign-run'}},
+        {sessionUpdate:'tool_call_update',toolCallId:'owned-tool',status:'cancelled',_meta:{'codebuddy.ai/isTeamMember':true}},
+      ])f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update}});
+      await tick();assert.equal(f.events.some(event=>event.eventType==='input.invalidated'),false);
+      const cancelled={jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'tool_call_update',toolCallId:'owned-tool',status:'cancelled',
+        _meta:{'codebuddy.ai/toolCancelReason':'permission_denied'}}}};
+      f.send(cancelled);f.send(cancelled);await tick();
+      const withdrawn=f.events.filter(event=>event.eventType==='input.invalidated');assert.equal(withdrawn.length,1);
+      assert.equal(withdrawn[0]!.eventType==='input.invalidated'&&withdrawn[0]!.payload.vendorRequestId,requested.payload.vendorRequestId);
+      assert.equal(f.events.some(event=>event.eventType==='input.accepted'),false);
+      assert.equal(f.calls.some(call=>call.method==='_codebuddy.ai/resolveInterruption'),false);
+    }finally{await f.adapter.disconnect('synthetic-instance');}
+  }
+});
 test('completed native question is withdrawn, while a permission broadcast alone never answers it',async()=>{
   const f=await running('ask-1');
   try {

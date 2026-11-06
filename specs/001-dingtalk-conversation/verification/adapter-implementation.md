@@ -4,12 +4,14 @@
 这份记录不代表 001 完成，也不授予真实服务准入。
 
 2026-11-06 补充：已独立复现显式启动初始化后的不同 Harness 会话创建、生产 ACP 执行及正常断连恢复；另已修复问题能力握手，原始 ACP 单选题、一次答案明确接收和原 Run 续行也已复现。下文早期单次新建及仅桌面答题样本保留，最新边界见 [接口补充调查](interface-research-2026-11-06.md)。
+后续已观察原始 ACP 一次执行权限拒绝明确接收及原 Run 取消，并修复 cancelled 待答撤销遗漏；该路径没有工具取消标记。完整权限与恢复仍未准入，见[拒绝实验](permission-denial-2026-11-06.md)。
+另有只观察的普通 Hook 显式入口，原 Run、Stop 正文和 FinalStop 已在两个 Run 分别复现；限定转录观察还发现 Stop 时持久化可能落后。它没有被接入生产输出归一化或用于准入，见 [Hook 调查](hook-output-2026-11-06.md)。
 
 | 范围 | 已写入代码与检查 | 仍缺少的真实依据 |
 | --- | --- | --- |
 | WorkBuddy ACP | 配置的回环 HTTP/SSE、严格 JSON-RPC 关联、原 Harness 会话 new/load、快速 handle、带 expectedRequestId 的 steer；修改请求不隐式重试；独立桌面实验已续接原 Harness 会话，连续两条 running 及单条待答期间接收的补充已观察原提交内生效 | 可接受的长期发现/激活流程、Courier 重启后的原映射恢复、写入权交接及完整运行状态覆盖 |
 | WorkBuddy 输出 | 过滤 thought、compact、成员与历史控制帧；用厂商 messageId 归属文本，在显式终态后组装普通 message | progress/final 分类、稳定片段重投身份和各逻辑消息的独立结束边界；不能凭单样本身份字段补齐 |
-| WorkBuddy 人工输入 | 原生 AskUserQuestion、标准权限及广播 interruption 关联原工具/Run；双通道合并且不扩大选项范围；只有原调用返回 resolved=true、queued=false 才确认；正常桌面答复及修复握手后的原始 ACP 单选答复、原 Run 续行均已独立复现 | 完整 Courier/钉钉答复链路、执行权限批准/拒绝、撤销/重连有效性；单独 permissionResolved 广播不证明本次操作被接收；普通 RPC 响应发送后仍 unknown |
+| WorkBuddy 人工输入 | 原问题/权限关联原工具和 Run，双通道合并不扩大选项；只有原调用 resolved=true、queued=false 才确认；原始 ACP 单选答复/续行、一次权限拒绝/原 Run 取消已有独立观察；cancelled 待答撤销已修复 | 完整 Courier/钉钉答复链路、批准、更多拒绝及撤销/重连有效性；单独 permissionResolved 广播不确认操作；普通 RPC 响应发送后仍 unknown |
 | 钉钉入站 | scope/robotCode/chatbotUserId/senderId/senderStaffId 分开；独立 SDK worker 隔离原始日志；核心持久事务后 ACK；已真实连接和关闭新 worker | 原 msgId 重投稳定性及作用域；新 worker 的持久登记后 ACK 及重启重投 |
 | 钉钉投递 | 原私聊 webhook 私有保存、过期/长度/目标校验、显式超时、业务成功码、未知不重试；重投不创建新预算 | 适用官方限额、同轮三条真实投递和业务错误码的具体未发送语义；非零未知码不套用其他 API 的错误定义 |
 | 核实及备用路径 | inspectOperation/inspectDelivery 返回 unsupported；OTO 明确不可用，不从 senderId 猜企业用户 | 没有权威查询或同原私聊 OTO 证据；这是禁用分支，不是已证明平台永远不支持 |
