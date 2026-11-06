@@ -12,13 +12,16 @@ import { inspect } from './inspect.js';
 import { WorkBuddyOutput } from './output.js';
 import { interaction,interactionSession,isInteractionRequest,mergeInteraction,type InteractionMapping } from './interaction.js';
 import { answerInteraction,prepareInteractionAnswer } from './interaction-command.js';
-import type { ErrorCode } from '../../domain/errors.js';
+import { CourierError,type ErrorCode } from '../../domain/errors.js';
 import type { DesktopStatus } from './authentication.js';
+import { formatterMcpServer } from './formatter.js';
 
 export interface WorkBuddyOptions {
   connection:AcpConnection;store:MappingStore;cwd:string;instanceId:string;contextFingerprint:string;evidence:CapabilityEvidence[];
   authentication?:()=>Promise<boolean|undefined>;receiptTimeoutMs?:number;
   identity?:()=>Promise<DesktopStatus|undefined>;expectedCliVersion?:string;
+  formatterLaunch?:{executable:string;entrypoint:string};
+  typedFormatterOutput?:boolean;
 }
 interface ActiveRun {ref:string;input:StartInput;resolve:(receipt:Receipt)=>void;timer:NodeJS.Timeout;accepted:boolean;output:WorkBuddyOutput;sequence:number;nextOrder:number;
   knownTools:Set<string>;unbound:Map<string,InteractionMapping[]>;unmappedTools:Set<string>;limitations:Set<string>;protocolBlocked:boolean;references:WorkBuddyRunReferences}
@@ -31,6 +34,7 @@ export class WorkBuddyAdapter implements HarnessPort {
   private readonly steering:WorkBuddySteering;
   private initialize:Record<string,unknown>={};
   constructor(private readonly options:WorkBuddyOptions) {
+    if(options.typedFormatterOutput&&!options.formatterLaunch)throw new CourierError('configuration_invalid');
     this.steering=new WorkBuddySteering(options.connection,options.store,(input,appliedEvidence,transition)=>{
       const run=this.active.get(input.sessionRef);
       if(run?.ref===input.expectedRunRef&&!run.references.advance(transition)) {
@@ -80,7 +84,8 @@ export class WorkBuddyAdapter implements HarnessPort {
   private handle(operationId:string,work:()=>Promise<Receipt>):CommandHandle {return {operationId,receipt:work().catch(rejectedReceipt)};}
   createSession(input:OperationInput&{courierSessionId:string}):CommandHandle {
     return this.handle(input.operationId,async()=>{
-      const result=record(await this.options.connection.call('session/new',{cwd:this.options.cwd,mcpServers:[]},input.operationId));
+      const result=record(await this.options.connection.call('session/new',{cwd:this.options.cwd,
+        mcpServers:this.options.formatterLaunch?[formatterMcpServer(this.options.formatterLaunch)]:[]},input.operationId));
       const sessionRef=string(result['sessionId']);
       if(!sessionRef)return {status:'unknown',errorCode:'state_unknown'};
       if(this.options.store.get(`session:${sessionRef}`)!==undefined)return {status:'unknown',errorCode:'protocol_conflict'};
@@ -91,7 +96,8 @@ export class WorkBuddyAdapter implements HarnessPort {
   resumeSession(input:SessionInput):CommandHandle {
     return this.handle(input.operationId,async()=>{
       if(!record(this.initialize['agentCapabilities'])['loadSession'])return {status:'rejected',errorCode:'resume_unsupported',definitelyNotAccepted:true};
-      const result=record(await this.options.connection.call('session/load',{sessionId:input.sessionRef,cwd:this.options.cwd,mcpServers:[]},input.operationId));
+      const result=record(await this.options.connection.call('session/load',{sessionId:input.sessionRef,cwd:this.options.cwd,
+        mcpServers:this.options.formatterLaunch?[formatterMcpServer(this.options.formatterLaunch)]:[]},input.operationId));
       if(result['sessionId']!==undefined && result['sessionId']!==input.sessionRef)return {status:'unknown',errorCode:'protocol_conflict'};
       if(this.options.store.get(`session:${input.sessionRef}`)===undefined)this.options.store.set(`session:${input.sessionRef}`,{kind:'resumed'});
       return {status:'accepted',sessionRef:input.sessionRef,receiptEvidence:'workbuddy:session/load:response'};
@@ -104,7 +110,9 @@ export class WorkBuddyAdapter implements HarnessPort {
     let resolve!:(receipt:Receipt)=>void;
     const receipt=new Promise<Receipt>(done=>{resolve=done;});
     const timer=setTimeout(()=>resolve({status:'unknown',errorCode:'state_unknown'}),this.options.receiptTimeoutMs??10000);
-    const run:ActiveRun={ref,input,resolve,timer,accepted:false,output:new WorkBuddyOutput(),sequence:0,nextOrder:0,
+    const run:ActiveRun={ref,input,resolve,timer,accepted:false,output:new WorkBuddyOutput(this.options.typedFormatterOutput?{
+      emit:(type,payload,key)=>this.event(input.sessionRef,run,type,payload,key),nextOrder:()=>run.nextOrder++,
+    }:undefined),sequence:0,nextOrder:0,
       knownTools:new Set(),unbound:new Map(),unmappedTools:new Set(),limitations:new Set(),protocolBlocked:false,references:new WorkBuddyRunReferences(ref)};this.active.set(input.sessionRef,run);
     void this.options.connection.call('session/prompt',{sessionId:input.sessionRef,prompt:[{type:'text',text:input.text}],
       _meta:{'codebuddy.ai/conversationRequestId':ref}},input.operationId,3600000).then(result=>{
@@ -112,7 +120,8 @@ export class WorkBuddyAdapter implements HarnessPort {
         if(!run.accepted || !stop || !['end_turn','max_tokens','max_turn_requests','refusal','cancelled','failed'].includes(stop)) {
           clearTimeout(timer);resolve({status:'unknown',errorCode:'state_unknown'});return;
         }
-        run.output.complete((type,payload,key)=>this.event(input.sessionRef,run,type,payload,key),()=>run.nextOrder++);
+        if(!run.output.complete((type,payload,key)=>this.event(input.sessionRef,run,type,payload,key),()=>run.nextOrder++))
+          this.limitation(input.sessionRef,run,'output_unsupported');
         for(const [id,mapping] of this.pending)if(mapping.sessionRef===input.sessionRef&&mapping.runRef===run.ref&&mapping.status!=='accepted') {
           this.event(input.sessionRef,run,'input.invalidated',{vendorRequestId:id,reason:'withdrawn'});this.pending.delete(id);
         }
@@ -189,8 +198,11 @@ export class WorkBuddyAdapter implements HarnessPort {
       const update=record(params['update']);
       if(internalFrame(params,update))return;
       const ref=requestRef(update)??requestRef(params);
+      const formatted=run.output.acceptsFormattedTool(params);
+      if(formatted&&ref!==undefined&&!run.references.formattedToolOutput(params))return;
       if(ref!==run.ref) {
-        if(run.accepted&&!run.protocolBlocked&&run.references.visibleOutput(params)) {
+        if(run.accepted&&!run.protocolBlocked&&(run.references.visibleOutput(params)||formatted&&run.references.formattedToolOutput(params))) {
+          if(formatted){this.trackTool(session,run,update);this.resolveControl(session,run,update);}
           if(run.output.accept(params)==='unsupported')this.limitation(session,run,'output_unsupported');
           return;
         }
@@ -198,6 +210,9 @@ export class WorkBuddyAdapter implements HarnessPort {
         if(mapping&&ref===undefined)this.request(session,run,mapping);
         else if(!mapping&&ref===undefined&&isInteractionRequest(message))this.unsupportedInteraction(session,run,message);
         if(ref===undefined)this.resolveControl(session,run,update);
+        const tool=string(update['toolCallId']);
+        if(ref===undefined&&run.accepted&&!run.protocolBlocked&&tool&&run.knownTools.has(tool)&&run.output.acceptsFormattedTool(params)&&
+          run.output.accept(params)==='unsupported')this.limitation(session,run,'output_unsupported');
         return;
       }
       if(!run.accepted && ['user_message_chunk','agent_message_chunk','agent_thought_chunk','tool_call'].includes(String(update['sessionUpdate']))) {
@@ -206,22 +221,26 @@ export class WorkBuddyAdapter implements HarnessPort {
         run.resolve({status:'accepted',sessionRef:session,runRef:run.ref,receiptEvidence:'workbuddy:correlated-user-echo'});
       }
       if(run.accepted) {
-        if(update['sessionUpdate']==='tool_call') {
-          const tool=string(update['toolCallId']);
-          if(tool){run.knownTools.add(tool);const pending=run.unbound.get(tool)??[];run.unbound.delete(tool);for(const mapping of pending)this.request(session,run,mapping);
-            if(run.unmappedTools.delete(tool))this.limitation(session,run,'interaction_blocked');}
-        }
+        this.trackTool(session,run,update);
         const mapping=interaction(message,session,run.ref,this.epoch);if(mapping)this.request(session,run,mapping);
         else if(isInteractionRequest(message))this.unsupportedInteraction(session,run,message);
         this.resolveControl(session,run,update);
         const visible=['agent_message_chunk','assistant_message_chunk'].includes(String(update['sessionUpdate']));
-        if((!visible||(!run.protocolBlocked&&run.references.visibleOutput(params)))&&run.output.accept(params)==='unsupported')this.limitation(session,run,'output_unsupported');
+        if(!(formatted&&run.protocolBlocked)&&(!visible||(!run.protocolBlocked&&run.references.visibleOutput(params)))&&
+          run.output.accept(params)==='unsupported')this.limitation(session,run,'output_unsupported');
       }
       return;
     }
     const mapping=interaction(message,session,run.ref,this.epoch);
     if(!mapping){if(isInteractionRequest(message))this.unsupportedInteraction(session,run,message);return;}
     this.request(session,run,mapping);
+  }
+  private trackTool(session:string,run:ActiveRun,update:Record<string,unknown>):void {
+    if(update['sessionUpdate']!=='tool_call')return;
+    const tool=string(update['toolCallId']);if(!tool)return;
+    run.knownTools.add(tool);const pending=run.unbound.get(tool)??[];run.unbound.delete(tool);
+    for(const mapping of pending)this.request(session,run,mapping);
+    if(run.unmappedTools.delete(tool))this.limitation(session,run,'interaction_blocked');
   }
   private request(session:string,run:ActiveRun,mapping:InteractionMapping):void {
     if(!run.knownTools.has(mapping.toolCallId)) {

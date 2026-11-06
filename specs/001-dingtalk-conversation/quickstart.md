@@ -233,6 +233,7 @@ npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PRO
 该原生拒绝分支可能没有工具取消标记，探测分别报告标记是否出现，不凭文本或流关闭补造；unknown 不重试，不批准或替换为其他任务。结果见 verification/permission-denial-2026-11-06.md。
 `--acp-bootstrap-owned-hooks` 单独运行，在本次自有私有目录中配置只观察的普通 Hook，包含独立创建/恢复前提；该入口不读取转录内容或环境，不修改用户设置，也不输出权限决定。
 它只保存原生身份、正文等白名单字段的摘要；匹配本次 Harness 会话/Run、单个 Stop 和 completed 的 FinalStop 才报告这组观察成立。未知字段、不完整记录和重复 Stop 不据此通过；逻辑消息/片段及进度分类仍未准入，见 verification/hook-output-2026-11-06.md。
+采集在文件锁内检查 1 MiB 总量、4096 条记录、完整末行及私有权限，超过边界不追加。Stop/FinalStop 只证明相应 Hook 已触发，实测均可能早于本轮完整转录写入，不能作为转录刷新屏障。
 `--permission-denial` 单独运行：仅将本次新建的 Harness 会话配置为 default 权限模式，
 请求一个只打印合成标记的 Python 命令，并只对原工具/Run 和完整命令一致的请求提交一次拒绝。
 它不会批准可执行工具或调整全局权限配置，不能与恢复、问题或 ACP 交接实验混用；实际结果见 verification。
@@ -284,6 +285,17 @@ node --env-file=.env build/test/tests/probes/dingtalk-capabilities.js --enable-l
 该模式只对匹配当前合成标记的原私聊操作。确认业务成功不等于用户已读或所有限额已验证；每条结果私有保存，未知即停止，应用支持状态仍为 unverified。
 
 真实观察入口 `test:live` 不由 `npm test` 执行。私有测试范围文件格式为 `{"allowedSenderIds":["<PRIVATE_TEST_USER_REFERENCE>"],"windowSeconds":60}`，只包含获准测试用户的 senderId，不在共享材料中填真实值。
+
+补充的显式 MCP 格式化来源可通过下列独立入口观察；启动配置和输出仍须位于 Git 外的私有位置：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-bootstrap-owned-formatter
+```
+
+该选项与其他独立任务模式互斥。它先核对两轮普通任务的独立创建、恢复及上下文，再正常断连/load 原 Harness 会话，以显式 typed 模式请求两次同文 progress 和一次 final。
+创建和每次恢复均配置同一纯格式化生产者；核对原生调用身份、结果回显、三条完整快照和独立的原 Run end_turn。遇到人工请求即保留未验证，不回答或批准；未知结果不重试，不发送钉钉消息。
+它需要 Agent 明确调用纯格式化工具，尚无日常 serve 配置；默认不启动，也不能据此跳过真实服务门槛。
+正式入口已局部观察上述三条输出；独立 steer 样本仍未通过原输入归属及补充内容检查，范围与后续验证见 verification/formatter-output-2026-11-06.md。
 
 ```bash
 npm run test:live -- --enable-live --config "$COURIER_CONFIG" --scope "$LIVE_SCOPE" --output "$LIVE_OUTPUT"

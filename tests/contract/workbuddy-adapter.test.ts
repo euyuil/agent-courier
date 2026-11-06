@@ -9,7 +9,7 @@ import { rejectedReceipt } from '../../src/adapters/workbuddy-experimental/error
 import { RpcFailure } from '../../src/adapters/workbuddy-experimental/connection.js';
 import { interaction } from '../../src/adapters/workbuddy-experimental/interaction.js';
 
-function fixture(resolution:unknown={resolved:true,queued:false},steerResponse:'accepted'|'timeout'='accepted') {
+function fixture(resolution:unknown={resolved:true,queued:false},steerResponse:'accepted'|'timeout'='accepted',formatterLaunch?:{executable:string;entrypoint:string},typedFormatterOutput=false) {
   let stream:ReadableStreamDefaultController<Uint8Array>;
   const calls:{id:string|number;method:string;params:Record<string,unknown>;result?:unknown}[]=[];
   const request=(async(_url,init)=>{
@@ -29,10 +29,103 @@ function fixture(resolution:unknown={resolved:true,queued:false},steerResponse:'
   }) as typeof fetch;
   const connection=new AcpConnection({endpoint:'http://127.0.0.1:1/api/v1/acp',request,timeoutMs:100});
   const data=new Map<string,unknown>(),store:MappingStore={get:key=>data.get(key),set:(key,value)=>{data.set(key,value);}};
-  const adapter=new WorkBuddyAdapter({connection,store,cwd:'.',instanceId:'synthetic-instance',contextFingerprint:'synthetic',evidence:[],authentication:async()=>true});
+  const adapter=new WorkBuddyAdapter({connection,store,cwd:'.',instanceId:'synthetic-instance',contextFingerprint:'synthetic',evidence:[],authentication:async()=>true,
+    ...(formatterLaunch?{formatterLaunch}:{}),typedFormatterOutput});
   return {connection,adapter,calls,data,send(message:unknown){stream.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(message)}\r\n\r\n`));}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('typed formatter mode requires an explicitly configured producer',()=>{
+  assert.throws(()=>fixture(undefined,'accepted',undefined,true),{message:'configuration_invalid'});
+});
+test('typed formatter follows a verified steer owner only with the original prompt provenance',async()=>{
+  const f=fixture(undefined,'accepted',{executable:'/synthetic/bin/node',entrypoint:'/synthetic/formatter-server.js'},true);
+  await f.adapter.connect();const session='synthetic-harness-session',events:HarnessEvent[]=[];f.adapter.subscribe(session,e=>events.push(e));
+  try {
+    const handle=f.adapter.start({operationId:'typed-steer-start',inputId:'input',sessionRef:session,text:'synthetic',clientRunId:'courier-run'});
+    await tick();const command=f.calls.find(call=>call.method==='session/prompt')!,run=(command.params['_meta'] as Record<string,string>)['codebuddy.ai/conversationRequestId']!;
+    const send=(update:unknown,sessionId=session)=>f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId,update}});
+    send({sessionUpdate:'user_message_chunk',_meta:{'codebuddy.ai/requestId':run}});await handle.receipt;
+    const source=(id:string,owner:string,origin:string)=>({sessionUpdate:'tool_call',toolCallId:id,status:'in_progress',rawInput:{kind:'final',text:'linked body'},
+      _meta:{'codebuddy.ai/conversationRequestId':owner,'codebuddy.ai/requestId':owner,'codebuddy.ai/messageRequestId':origin,
+        'codebuddy.ai/toolName':'mcp__courier_formatter__courier_format_message'}});
+    const done=(id:string,owner?:string,origin=run)=>({sessionUpdate:'tool_call_update',toolCallId:id,status:'completed',
+      rawOutput:{text:JSON.stringify({schemaVersion:1,kind:'final',text:'linked body'})},
+      ...(owner?{_meta:{'codebuddy.ai/conversationRequestId':owner,'codebuddy.ai/requestId':owner,'codebuddy.ai/messageRequestId':origin}}:{})});
+    send(source('unproved','native-next',run));send(done('unproved','native-next'));await tick();
+    assert.equal(events.some(e=>e.eventType==='message.started'),false);
+    const input={operationId:'typed-steer',inputId:'typed-extra',sessionRef:session,expectedRunRef:run,text:'synthetic change'};
+    assert.equal((await f.adapter.steer(input).receipt).status,'accepted');
+    const steer=f.calls.find(call=>call.id===input.operationId)!;
+    send({sessionUpdate:'user_message_chunk',messageId:input.inputId,_meta:{'codebuddy.ai/conversationRequestId':run,'codebuddy.ai/requestId':'native-next',
+      'codebuddy.ai/messageRequestId':input.inputId,'codebuddy.ai/messageId':input.inputId,'codebuddy.ai/steerClientMeta':steer.params['_meta']}});await tick();
+    assert.equal(events.filter(e=>e.eventType==='input.applied').length,1);
+    send(source('foreign-origin','native-next','foreign'));send(done('foreign-origin','native-next','foreign'));send(done('foreign-origin'));
+    send({...source('conflicting','native-next',run),_meta:{...source('conflicting','native-next',run)._meta,'codebuddy.ai/requestId':'foreign'}});
+    send({...source('member','native-next',run),_meta:{...source('member','native-next',run)._meta,'codebuddy.ai/isTeamMember':true}});
+    send({...source('history','native-next',run),_meta:{...source('history','native-next',run)._meta,'codebuddy.ai/historyReplay':true}});
+    send(source('foreign-session','native-next',run),'foreign-session');await tick();
+    assert.equal(events.some(e=>e.eventType==='message.started'),false);
+    send(source('linked','native-next',run));send(done('linked','native-next'));send(done('linked'));await tick();
+    const bodies=events.filter(e=>e.eventType==='message.fragment');assert.equal(bodies.length,1);
+    assert.equal(bodies[0]!.eventType==='message.fragment'&&bodies[0]!.payload.text,'linked body');
+    assert.equal(events.some(e=>e.eventType==='run.completed'),false);
+    f.send({jsonrpc:'2.0',id:'typed-steer-start',result:{stopReason:'end_turn'}});await tick();
+    assert.equal(events.filter(e=>e.eventType==='run.completed').length,1);assert.ok(events.every(e=>e.runRef===run));
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+});
+test('conflicting original formatter metadata cannot establish tool ownership for a later unscoped result',async()=>{
+  const f=fixture(undefined,'accepted',{executable:'/synthetic/bin/node',entrypoint:'/synthetic/formatter-server.js'},true);
+  await f.adapter.connect();const session='synthetic-harness-session',events:HarnessEvent[]=[];f.adapter.subscribe(session,e=>events.push(e));
+  try {
+    const handle=f.adapter.start({operationId:'conflict-start',inputId:'input',sessionRef:session,text:'synthetic',clientRunId:'courier-run'});
+    await tick();const command=f.calls.find(call=>call.method==='session/prompt')!,run=(command.params['_meta'] as Record<string,string>)['codebuddy.ai/conversationRequestId']!;
+    const send=(update:unknown)=>f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update}});
+    send({sessionUpdate:'tool_call',toolCallId:'ambiguous',rawInput:{kind:'final',text:'untrusted'},_meta:{
+      'codebuddy.ai/conversationRequestId':run,'codebuddy.ai/requestId':'foreign','codebuddy.ai/toolName':'mcp__courier_formatter__courier_format_message'}});
+    await tick();assert.equal(events.some(e=>e.eventType==='run.started'||e.eventType==='message.started'),false);
+    send({sessionUpdate:'user_message_chunk',_meta:{'codebuddy.ai/requestId':run}});await handle.receipt;
+    send({sessionUpdate:'tool_call_update',toolCallId:'ambiguous',status:'completed',rawOutput:{text:JSON.stringify({schemaVersion:1,kind:'final',text:'untrusted'})}});
+    await tick();assert.equal(events.some(e=>e.eventType==='message.fragment'),false);
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+});
+test('typed formatter output retains original scope and its final message never substitutes for prompt completion',async()=>{
+  const f=fixture(undefined,'accepted',{executable:'/synthetic/bin/node',entrypoint:'/synthetic/formatter-server.js'},true);
+  await f.adapter.connect();const session='synthetic-harness-session',events:HarnessEvent[]=[];f.adapter.subscribe(session,e=>events.push(e));
+  try {
+    const handle=f.adapter.start({operationId:'typed-start',inputId:'typed-input',sessionRef:session,text:'synthetic',clientRunId:'typed-run'});
+    await tick();const prompt=f.calls.find(call=>call.method==='session/prompt')!,run=(prompt.params['_meta'] as Record<string,string>)['codebuddy.ai/conversationRequestId']!;
+    const tool={sessionUpdate:'tool_call',toolCallId:'formatted-tool',status:'in_progress',rawInput:{kind:'final',text:'synthetic body'},
+      _meta:{'codebuddy.ai/requestId':run,'codebuddy.ai/toolName':'mcp__courier_formatter__courier_format_message'}};
+    const send=(sessionId:string,update:unknown)=>f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId,update}});
+    send('foreign-session',tool);send(session,{...tool,_meta:{...tool._meta,'codebuddy.ai/requestId':'foreign-run'}});await tick();
+    assert.equal(events.some(e=>e.eventType==='message.started'),false);
+    send(session,tool);assert.equal((await handle.receipt).status,'accepted');
+    const end={sessionUpdate:'tool_call_update',toolCallId:'formatted-tool',status:'completed',rawOutput:{text:JSON.stringify({schemaVersion:1,kind:'final',text:'synthetic body'})}};
+    send(session,{...end,_meta:{'codebuddy.ai/requestId':'foreign-run'}});await tick();assert.equal(events.some(e=>e.eventType==='message.fragment'),false);
+    send(session,end);send(session,end);await tick();
+    assert.equal(events.filter(e=>e.eventType==='message.fragment').length,1);assert.equal(events.some(e=>e.eventType==='run.completed'),false);
+    send(session,{sessionUpdate:'agent_message_chunk',content:{type:'text',text:'untyped body'},_meta:{'codebuddy.ai/requestId':run,'codebuddy.ai/messageId':'untyped'}});
+    f.send({jsonrpc:'2.0',id:'typed-start',result:{stopReason:'end_turn'}});await tick();
+    assert.equal(events.filter(e=>e.eventType==='run.completed').length,1);assert.equal(events.filter(e=>e.eventType==='message.fragment').length,1);
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+});
+test('explicit formatter launch is carried through both creation and original-session resume without permission overrides',async()=>{
+  const launch={executable:'/synthetic/bin/node',entrypoint:'/synthetic/formatter-server.js'},f=fixture(undefined,'accepted',launch);
+  await f.adapter.connect();
+  try {
+    await f.adapter.createSession({operationId:'create',courierSessionId:'courier'}).receipt;
+    await f.adapter.resumeSession({operationId:'resume',sessionRef:'synthetic-harness-session'}).receipt;
+    const calls=f.calls.filter(call=>['session/new','session/load'].includes(call.method));assert.equal(calls.length,2);
+    const expected=[{name:'courier_formatter',command:launch.executable,args:[launch.entrypoint],env:[],_meta:{_workbuddyMcpOrigin:'custom',defer_loading:false}}];
+    for(const call of calls){assert.deepEqual(call.params['mcpServers'],expected);assert.equal(call.params['permissionMode'],undefined);}
+    const probe=await f.adapter.probe('synthetic-instance');
+    assert.equal(probe.capabilities.typedVisibleOutput,'unverified');assert.equal(probe.capabilities.messageAssembly,'unverified');
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+  const plain=fixture();await plain.adapter.connect();
+  try{await plain.adapter.createSession({operationId:'plain-create',courierSessionId:'plain'}).receipt;
+    assert.deepEqual(plain.calls.find(call=>call.method==='session/new')?.params['mcpServers'],[]);
+  }finally{await plain.adapter.disconnect('synthetic-instance');}
+});
 test('ACP handshake enables native questions without advertising client filesystem or execution capabilities',async()=>{
   const f=fixture();await f.adapter.connect();
   try {

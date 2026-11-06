@@ -4,7 +4,7 @@ Agent Courier 是一个连接钉钉与不同 Harness（Agent 运行系统）的�
 
 **本项目不实现 Agent 本身。** Agent 在 Harness 中执行任务；模型调用、工具执行、本地文件访问和执行环境由接入的 Harness 提供和管理。
 
-当前状态：001 的通用核心及未准入的真实适配器代码已写入，158 项离线测试通过。
+当前状态：001 的通用核心及未准入的真实适配器代码已写入，181 项离线测试通过。
 
 WorkBuddy 独立实验已观察正常登录、文本任务终态、原生问题答复、原 Harness 会话恢复与原始 ACP 连接。
 连续两条补充已在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别观察到原任务内生效；完成后 idle 拒绝及运行中斜杠文本拒绝也有独立样本。
@@ -14,7 +14,8 @@ WorkBuddy 独立实验已观察正常登录、文本任务终态、原生问题�
 2026-11-06 的[接口补充调查](specs/001-dingtalk-conversation/verification/interface-research-2026-11-06.md)已找到并复现：显式初始化自有启动 Harness 会话后，再新建不同的 Harness 会话，可通过生产 ACP 适配器执行、断连并恢复原上下文。
 另已修复 ACP 握手缺少问题能力声明的缺陷；原始 ACP 原生单选题、一次答案明确接收和原 Run 续行已独立复现，完整权限往返仍未验证。
 随后已独立观察原始 ACP 拒绝回执及原 Run 取消，并修复原工具 cancelled 状态未及时撤销待答请求的遗漏；边界见[拒绝实验](specs/001-dingtalk-conversation/verification/permission-denial-2026-11-06.md)。
-普通 Hook 的原 Run 关联、Stop 完整正文和 FinalStop 也已独立复现；转录元数据另显示 Stop 时本轮回答可能尚未落盘。进度分类与完整输出桥接仍缺证，见 [Hook 调查](specs/001-dingtalk-conversation/verification/hook-output-2026-11-06.md)。
+普通 Hook 的原 Run 关联、Stop 完整正文和 FinalStop 也已独立复现；转录元数据另显示 Stop 和 FinalStop 时本轮回答都可能尚未落盘，不能作为转录完成屏障。进度分类与完整输出桥接仍缺证，见 [Hook 调查](specs/001-dingtalk-conversation/verification/hook-output-2026-11-06.md)。
+另已实现并通过正式探测入口局部验证[显式 MCP 格式化输出来源](specs/001-dingtalk-conversation/verification/formatter-output-2026-11-06.md)：同一原 Run 的两个同文 progress 和一个 final 均保留原生工具身份及完成回显，final 与 Run 终态分开。独立 steer 样本的后续输出缺少所需原输入归属，仍被保守隔离；日常配置、steer/重放/恢复及完整准入仍未完成，默认未启用此模式。
 真实适配仍需正常发现/激活与生命周期、桌面持有的原 Harness 会话写入权交接，以及可靠输出分类/片段身份/消息结束契约。继续条件见[实现复核](specs/001-dingtalk-conversation/verification/implementation-review.md)；不能以模拟通过或配置修改替代这些前提。
 
 首个功能的[规格](specs/001-dingtalk-conversation/spec.md)与

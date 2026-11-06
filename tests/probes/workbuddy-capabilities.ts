@@ -73,13 +73,14 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
     steer=args.includes('--steer-running')||twice||slash||near,
     waitingTwice=args.includes('--steer-waiting-twice'),waiting=args.includes('--steer-waiting')||waitingTwice,
     ownedQuestion=args.includes('--acp-bootstrap-owned-question'),ownedDenial=args.includes('--acp-bootstrap-owned-denial'),
-    ownedHooks=args.includes('--acp-bootstrap-owned-hooks'),bootstrapOwned=args.includes('--acp-bootstrap-owned-run')||ownedQuestion||ownedDenial||ownedHooks,
+    ownedHooks=args.includes('--acp-bootstrap-owned-hooks'),ownedFormatter=args.includes('--acp-bootstrap-owned-formatter'),
+    bootstrapOwned=args.includes('--acp-bootstrap-owned-run')||ownedQuestion||ownedDenial||ownedHooks||ownedFormatter,
     owned=args.includes('--acp-owned-run')||bootstrapOwned,
     toolSteer=args.includes('--steer-long-tool'),completedSteer=args.includes('--steer-after-completion'),
     failures=args.includes('--steer-failure-boundaries'),
     handoff=args.includes('--acp-handoff'),processDiscovery=args.includes('--acp-process-surface')||handoff,
     acp=args.includes('--acp-surface')||processDiscovery,exercise=args.includes('--exercise')||question||resume||acp||permissionDenial||steer||waiting||owned||toolSteer||completedSteer||failures;
-  const ownedModes=['--acp-owned-run','--acp-bootstrap-owned-run','--acp-bootstrap-owned-question','--acp-bootstrap-owned-denial','--acp-bootstrap-owned-hooks'];
+  const ownedModes=['--acp-owned-run','--acp-bootstrap-owned-run','--acp-bootstrap-owned-question','--acp-bootstrap-owned-denial','--acp-bootstrap-owned-hooks','--acp-bootstrap-owned-formatter'];
   const flags=args.filter(arg=>!['--exercise','--question','--question-interruption','--resume','--acp-surface','--acp-process-surface','--acp-handoff',...ownedModes,'--permission-denial','--steer-running','--steer-running-twice','--steer-same-text','--steer-slash','--steer-near-completion','--steer-waiting','--steer-waiting-twice','--steer-long-tool','--steer-after-completion','--steer-failure-boundaries'].includes(arg));
   if(flags.length!==5||flags[0]!=='--enable-live'||flags[1]!=='--launch-profile'||flags[3]!=='--output'||(acp&&(question||resume))||
     (permissionDenial&&(acp||question||resume))||(steer&&(acp||question||resume||permissionDenial))||(twice&&args.includes('--steer-running'))||
@@ -90,7 +91,7 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
     (sameText&&args.includes('--steer-running-twice'))||(toolSteer&&(acp||question||resume||permissionDenial||steer||waiting||owned))||
     (completedSteer&&(acp||question||resume||permissionDenial||steer||waiting||owned||toolSteer))||
     (failures&&(acp||question||resume||permissionDenial||steer||waiting||owned||toolSteer||completedSteer))) {
-    process.stderr.write('需要 --enable-live --launch-profile <私有 JSON> --output <Git 外新文件>；可选 --exercise、--question、--question-interruption、--resume、--acp-surface、--acp-process-surface、--acp-handoff、--acp-owned-run、--acp-bootstrap-owned-run、--acp-bootstrap-owned-question、--acp-bootstrap-owned-denial、--acp-bootstrap-owned-hooks、--permission-denial、--steer-running、--steer-running-twice、--steer-same-text、--steer-slash、--steer-near-completion、--steer-waiting、--steer-waiting-twice、--steer-long-tool、--steer-after-completion、--steer-failure-boundaries。\n');return 2;
+    process.stderr.write('需要 --enable-live --launch-profile <私有 JSON> --output <Git 外新文件>；可选 --exercise、--question、--question-interruption、--resume、--acp-surface、--acp-process-surface、--acp-handoff、--acp-owned-run、--acp-bootstrap-owned-run、--acp-bootstrap-owned-question、--acp-bootstrap-owned-denial、--acp-bootstrap-owned-hooks、--acp-bootstrap-owned-formatter、--permission-denial、--steer-running、--steer-running-twice、--steer-same-text、--steer-slash、--steer-near-completion、--steer-waiting、--steer-waiting-twice、--steer-long-tool、--steer-after-completion、--steer-failure-boundaries。\n');return 2;
   }
   let child:ChildProcess|undefined,directory:string|undefined,diagnostic:Diagnostic|undefined,reserved=false;
   const report:Record<string,unknown>={kind:'real_workbuddy_experiment',capabilityOutcome:'unverified',exerciseRequested:exercise};
@@ -173,7 +174,7 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
           phase='acp_owned_session';
           report['ownedSessionObservation']=basic?.completedNormally===true&&basic.isProcessing===false?
             await ownedSessionExperiment(diagnostic,workspace,{initializeBootstrap:bootstrapOwned,exerciseQuestion:ownedQuestion,
-              exercisePermission:ownedDenial,observeHooks:ownedHooks}):{status:'skipped_incomplete_original_task'};
+              exercisePermission:ownedDenial,observeHooks:ownedHooks,exerciseFormatter:ownedFormatter}):{status:'skipped_incomplete_original_task'};
         }
         if(toolSteer) {
           const basic=observation as {completedNormally?:unknown;isProcessing?:unknown}|undefined;

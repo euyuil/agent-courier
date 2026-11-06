@@ -641,3 +641,23 @@ T001–T030、T036–T046、T049–T058、T060–T068、T070–T074、T076 已�
 - 仓库入口独立复现：首轮及断连/load 后的续聊，各有与原 Harness 会话/Run 精确匹配的 UserPromptSubmit、Stop、FinalStop；Stop 正文摘要匹配合成回答，FinalStop 原因为 completed。new=2、load=1、prompt=2，零工具/权限批准；Hook 只有 session_id/generation_id，无逐消息/片段字段，ACP 仍无可靠分类。
 - 另一次只读限定本次创建回执所有权及同名普通转录文件的实验显示：续聊 Stop 时还没有本轮完整回答，到 FinalStop 才出现本轮 assistant 身份和 completed 记录。相同正文的新旧回答按 generation 可区分；没有把 ID 存在性扩大为跨 Run 唯一性，也没有猜最后一条或补造分类。详见 verification/hook-output-2026-11-06.md。
 - 新增三项隐私/范围/完整性回归；完整离线套件 158 项通过，build/typecheck 通过，编译后应用行覆盖 3151/3664（86.00%）。输出桥接与正常生命周期仍缺证，整项仍 66/80、真实服务关闭；未新增 commit/push、权限批准或钉钉发送。
+
+### 2026-11-06：转录刷新反例与 Hook 写入边界
+
+- T031/T069：新有效结构样本的首轮 Stop 和 FinalStop 均没有完整 assistant 转录，稍后正常恢复后才同时见旧、新回答；两轮仍正常 end_turn 且上下文复述成立。因此两种 Hook 都不能当作转录刷新屏障。原生 reasoning、文件快照和自动标题也不能充当用户进度或输出结束指针；不保存这些记录的正文、路径和标题。
+- 临时扩展脚本的首个样本采集为空，包装的 observed 标签未被采信；修正并通过合成采集检查后另起独立有效样本，两轮各匹配三条原 Run Hook，new=2、load=1、prompt=2，55 个 ACP 可见帧，零工具/权限批准。既有样本保留，详见 verification/hook-output-2026-11-06.md。
+- T031：新增两项回归先复现采集端缺少容量和既有权限检查，再修复为文件锁内限制单条/累计 1 MiB、4096 条记录、私有文件所有权及完整末行；边界不满足不追加，避免仅在汇总时才发现日志已超限。
+- 完整离线套件 160 项通过，build/typecheck 通过，应用行覆盖 3151/3664（86.00%）。完整输出桥接仍缺证，整项维持 66/80，真实服务关闭；此轮无新增 commit/push、权限批准或钉钉发送。
+
+### 2026-11-06：显式 MCP 格式化输出来源
+
+- T031/T069：四次不含 prompt 的 HTTP 结果读取均因 Harness 会话不符拒绝；本机 Gateway Runs 执行分支会等待空闲并改为 BypassPermissions，没有调用它执行任务。改沿 ACP 配置纯格式化 MCP 工具提供显式 kind，消息身份取原生 toolCallId，完成核对 completed 与原参数的精确结果回显。
+- 已实现纯 stdio 格式化服务、单一结果解码、显式 new/load 配置及 typed 输出归一化；部分参数不投递，完整快照只一次，同文不同调用分别保留，缺失/失败/冲突不补造正文，final 与 Run 完成分离。没有增加模型 SDK、Agent loop 或自动权限决定。
+- 编译实现已独立归一化两个同文 progress 和一个 final：三个原生工具身份及原 Run、completed、结果回显均匹配，三条正文保留，普通 message 为 0，final 早于 Run end_turn；218 个原始帧，零权限请求/批准。基础两轮创建/恢复/标记通过，另加一次类型任务；正负样本与版本边界见 verification/formatter-output-2026-11-06.md。
+- 新增十三项回归；完整套件 173 项通过，build/typecheck 通过，应用行覆盖 3376/3908（86.39%）。日常配置/指纹、正式探测、steer 拥有者延续、重放/交叠、Courier 重启及完整人工范围仍待完成；T031/T069 等保持未勾选，仍 66/80、真实服务关闭。本轮没有新增 commit/push 或钉钉发送。
+
+### 2026-11-06：正式格式化探测与 steer 归属边界
+
+- T031/T069：实现 --acp-bootstrap-owned-formatter，基础两轮上下文通过后正常断连并 load 原 Harness 会话，由第三个显式 typed 适配器执行三消息观察。独立样本 283 帧，三个原生调用和精确结果回显、同文双 progress、三条归一化快照、final 早于原 Run end_turn 均成立；new=2、load=2、prompt=3，零人工请求/权限批准。
+- 格式化工具拥有者延续只接受已核实 steer 关系加原输入归属，冲突字段不能建立工具归属。另两次受控长消息实验的两条补充有 accepted/applied，但后续七个工具缺少所需原输入关联，仍被隔离；最新原生 final 也未包含补充标记，实验保持 unverified，不放宽为当前 Run 猜测。
+- 新增六项探测及两项生产回归，完整离线套件 181 项通过，build/typecheck 通过，应用行覆盖 3396/3930（86.41%）。日常配置/指纹、steer 输出归属、重放/交叠、Courier 重启及完整人工范围仍未完成；保持 66/80，真实服务关闭，没有钉钉发送。详细边界见 verification/formatter-output-2026-11-06.md。

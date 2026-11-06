@@ -9,11 +9,12 @@ Agent 在 Harness 中推理并执行任务；模型调用、工具执行和本�
 仓库已包含首个私聊功能的离线通用核心、SQLite 迁移、CLI、mock/fake 适配器和行为测试。
 另有未准入的 WorkBuddy ACP/钉钉适配器、独立能力探测及显式真实观察入口；默认测试不运行真实入口。
 WorkBuddy 独立实验已观察登录、消息标识、显式终态、原生问答及释放后恢复原 Harness 会话；
-当前 158 项离线测试通过；两条补充在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别于原任务内生效已有独立观察。idle/stale 与斜杠拒绝、控制连接故障注入后的 unknown 及私有库重开不再次派发也有独立观察；同进程对象重建不等于 Courier 重启验收，完整运行状态覆盖、权限往返及输出分类仍缺证。
+当前 181 项离线测试通过；两条补充在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别于原任务内生效已有独立观察。idle/stale 与斜杠拒绝、控制连接故障注入后的 unknown 及私有库重开不再次派发也有独立观察；同进程对象重建不等于 Courier 重启验收，完整运行状态覆盖、权限往返及输出分类仍缺证。
 2026-11-06 已在本版本独立复现：首次 ACP session/new 初始化自有启动 Harness 会话后，同一连接再次显式新建取得不同标识，并能执行、断连及恢复原上下文。已知标识仍不能覆盖原 Courier 关联；正常发现/激活与生命周期、桌面持有的原 Harness 会话写入权交接和完整接入仍未准入。详见 specs/001-dingtalk-conversation/verification/interface-research-2026-11-06.md。
 另已修复 ACP 问题能力握手声明；原始 ACP 原生单选题、答案明确接收及原 Run 续行已有独立复现，不等于完整执行权限往返或真实钉钉验收。
 原始 ACP 的一次执行权限拒绝已明确接收，原 Run 取消已有独立观察；没有批准执行权限。生产适配器已补齐原工具 cancelled 状态的待答撤销，完整权限/恢复及输出语义门槛仍保留；见 specs/001-dingtalk-conversation/verification/permission-denial-2026-11-06.md。
-普通 Hook 的 session_id/generation_id、Stop 正文及 FinalStop 已与两个原 Run 分别匹配；本机未见新版 Mods 加载入口。独立转录观察显示 Stop 时可能尚无本轮完整回答，不能按文本或旧记录归属；分类与片段门槛仍保留，见 specs/001-dingtalk-conversation/verification/hook-output-2026-11-06.md。
+普通 Hook 的 session_id/generation_id、Stop 正文及 FinalStop 已与两个原 Run 分别匹配；本机未见新版 Mods 加载入口。独立转录观察显示 Stop 和 FinalStop 时均可能尚无本轮完整回答，不能作为转录刷新保证，也不能按文本或旧记录归属；分类与片段门槛仍保留，见 specs/001-dingtalk-conversation/verification/hook-output-2026-11-06.md。
+新增未准入的显式 MCP 纯格式化生产者及 typed 输出模式，创建/恢复均传递相同 custom 配置；正式 --acp-bootstrap-owned-formatter 入口已独立归一为两个同文 progress 和一个 final，并校验结果回显及 Run 终态分离。格式化工具的后续拥有者必须同时具备已核实的 steer 延续和原输入归属；真实受控 steer 样本仍缺后者，不能按当前 Run 猜测接纳。普通文本不因此获得分类，日常配置/steer/重放/重启仍缺证；三项输出/人工能力仍 unverified，见 specs/001-dingtalk-conversation/verification/formatter-output-2026-11-06.md。MCP 工具不发消息、不改权限，模型和工具执行仍属于 Harness。
 真实适配与验收仍受 `specs/001-dingtalk-conversation/plan.md` 的门槛限制；未准入时不开放真实 serve。
 实际命令为 `npm ci`、`npm run build`、`npm run typecheck`、`npm test`、`npm run test:coverage`；
 状态库和私有配置须在 Git 外。当前支持边界与结果见该功能的 `verification/`。

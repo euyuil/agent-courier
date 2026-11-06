@@ -36,10 +36,25 @@ try:
   'markerDigests':[sha(value) for value in re.findall(r'CourierOwnedContext-[a-f0-9-]+',body or '')],
   'identityFields':[key for key in ['session_id','generation_id','message_id','hook_id','event_id','sequence','fragment_id'] if key in data],
   'finalStopReason':data.get('final_stop_reason') if data.get('final_stop_reason') in ['completed','cancelled','user_cancel','error','failed'] else None}
- fd=os.open(root/'courier-hook-observations.jsonl',os.O_WRONLY|os.O_CREAT|os.O_APPEND|os.O_NOFOLLOW,0o600)
- if not stat.S_ISREG(os.fstat(fd).st_mode):raise ValueError('nonregular output')
- fcntl.flock(fd,fcntl.LOCK_EX)
- os.write(fd,(json.dumps(row,separators=(',',':'))+'\n').encode());os.fsync(fd);os.close(fd)
+ encoded=(json.dumps(row,separators=(',',':'))+'\n').encode()
+ if len(encoded)>1048576:raise ValueError('bounded record')
+ fd=os.open(root/'courier-hook-observations.jsonl',os.O_RDWR|os.O_CREAT|os.O_APPEND|os.O_NOFOLLOW,0o600)
+ try:
+  fcntl.flock(fd,fcntl.LOCK_EX)
+  info=os.fstat(fd)
+  if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or info.st_mode&0o077:raise ValueError('private output required')
+  if info.st_size+len(encoded)>1048576:raise ValueError('bounded output')
+  prior=os.pread(fd,info.st_size,0)
+  if len(prior)!=info.st_size or prior and not prior.endswith(b'\n'):raise ValueError('incomplete output')
+  if prior.count(b'\n')>=4096:raise ValueError('bounded rows')
+  offset=0
+  while offset<len(encoded):
+   written=os.write(fd,encoded[offset:])
+   if written<=0:raise ValueError('incomplete write')
+   offset+=written
+  os.fsync(fd)
+ finally:
+  os.close(fd)
 except Exception:
  pass
 `;
@@ -62,7 +77,8 @@ export function summarizeClassicHooks(cwd:string,sessionRef:string,runRef:string
   const base={status:'unverified',executionPermissionApprovals:0};
   try {
     const path=join(cwd,hookRecordsName),file=lstatSync(path);
-    if(!file.isFile()||file.isSymbolicLink()||file.size>1048576||(file.mode&0o077)!==0)return {...base,reason:'hook_records_invalid'};
+    if(!file.isFile()||file.isSymbolicLink()||file.size>1048576||(file.mode&0o077)!==0||process.getuid&&file.uid!==process.getuid())
+      return {...base,reason:'hook_records_invalid'};
     const text=readFileSync(path,'utf8');
     if(!text.endsWith('\n'))return {...base,reason:'hook_records_incomplete'};
     const lines=text.split('\n').filter(Boolean);

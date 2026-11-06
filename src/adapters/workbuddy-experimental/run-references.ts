@@ -1,4 +1,4 @@
-import { metaField,record,requestRef,string } from './metadata.js';
+import { metaField,record,requestRef,string,internalFrame } from './metadata.js';
 
 export interface SteerTransition {ownerRef:string;nextRef:string}
 
@@ -20,6 +20,16 @@ export class WorkBuddyRunReferences {
   visibleOutput(params:Record<string,unknown>):boolean {
     const update=record(params['update']);
     if(!['agent_message_chunk','assistant_message_chunk'].includes(String(update['sessionUpdate'])))return false;
+    return this.ownedOutput(params);
+  }
+  formattedToolOutput(params:Record<string,unknown>):boolean {
+    const update=record(params['update']);
+    if(!['tool_call','tool_call_update'].includes(String(update['sessionUpdate'])))return false;
+    return this.ownedOutput(params);
+  }
+  private ownedOutput(params:Record<string,unknown>):boolean {
+    const update=record(params['update']);
+    if(internalFrame(params,update))return false;
     const ref=requestRef(update)??requestRef(params);if(!ref||!this.owners.has(ref))return false;
     for(const value of [update['requestId'],metaField(update['_meta'],'conversationRequestId'),metaField(update['_meta'],'requestId')])
       if(typeof value==='string'&&value!==ref)return false;

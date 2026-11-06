@@ -448,3 +448,31 @@ failureBoundariesObserved=true 只描述这组有界实验。正常生产发现/
 记录有 id、completed 和 providerData.messageId/conversationRequestId，但被检查的进度/最终语义字段未出现。本次只验证 ID 存在，没有把它扩大为跨 Run 唯一性通过。
 当前安装包未见新版 Mods 加载入口，不将最新 CLI 文档或服务网关代理当作本机原生事件接口。
 完整输出桥接尚未实现/准入；详细字段、持久化时序及边界见 hook-output-2026-11-06.md。
+
+### 追加转录结构观察与写入保护
+
+新独立结构样本显示：首轮 Stop 和 FinalStop 时都没有完整 assistant 记录，正常断连/load 后续聊时才同时见到旧、新回答。
+两轮原始终态均为 end_turn，上下文复述成立；这反驳将 FinalStop 当作转录刷新屏障的假设，不改变此前样本的实际时序记录。
+原生 reasoning、file-history-snapshot、ai-title 已按白名单字段存在性区分，未读取或保存其正文/路径/标题；不能把这些类型当作用户进度或输出结束指针。
+临时脚本的首个空采集样本按 matchedRows=0 判为未验证；修正且合成检查后的有效样本各三条原 Run Hook，new=2、load=1、prompt=2，55 个 ACP 可见帧，零工具与执行权限批准。
+
+另已修复普通 Hook 采集只在汇总端限制容量的遗漏：文件锁内拒绝超过 1 MiB/4096 条记录、权限变宽和末行不完整的追加，单条编码扩张超限也不能创建输出。
+两项新增回归先失败再通过；完整离线套件 160 项通过、0 失败，build/typecheck 通过，应用行覆盖 3151/3664（86.00%）。
+完整分类、片段与原生事件桥仍未准入；详见 hook-output-2026-11-06.md。
+
+## 2026-11-06：显式 MCP 格式化来源
+
+四次不含 prompt 的 HTTP 结果读取均因 Harness 会话不符而拒绝；Gateway Runs 分支会等待空闲及设 BypassPermissions，本次没有调用它执行任务。
+另沿正常 ACP mcpServers 配置纯格式化工具，类型来自 kind，消息身份和完成来自原生工具事件，权限策略保持原样。
+
+仓库编译服务、创建/恢复配置及 typed 归一化已独立观察三个调用：两个相同正文的 progress 和一个 final，各有不同 toolCallId、原 Run 关联、completed 和精确结果回显。
+归一化得到三条对应快照，普通未分类 message 为 0，final 先完成，原 Run 随后 end_turn；218 个原始 ACP 帧未截断，权限请求及批准均为 0。
+基础创建/恢复两轮正常完成并复述标记，记录 new=2/load=1/prompt=2；另追加本轮类型任务一次，不将附加任务漏算为仅两次 prompt。
+
+早期只有 ToolSearch 的未通过样本、初始连接插入实验导致基础零工具检查为 false 的样本，以及临时回显解码 false 的样本均保留，不回填通过。
+普通 ACP 文本、其他 MCP 工具或不同配置不能借用本次类型证据；日常配置/指纹、steer/重放/重启和完整交互仍未完成。
+代码继续强制 typedVisibleOutput/messageAssembly/humanInteraction=unverified，真实服务关闭；实现与详细样本见 formatter-output-2026-11-06.md。
+
+随后仓库 --acp-bootstrap-owned-formatter 正式入口独立复现上述三消息与原 Run 终态分离：基础上下文通过，283 帧完整，new=2、load=2、prompt=3，无额外工具或人工请求/权限批准。
+格式化工具新拥有者仍须同时具备已核实 steer 延续与原输入关联；独立八进度实验中两条补充 accepted/applied，但七个后续调用缺少原输入关联，保持隔离。最新原生 final 未包含两条补充标记，受控实验不通过，不能据此宣称完整 steer 输出桥接。
+正式探测及生产归属新增八项回归，最新完整离线套件 181 项通过；不提升真实能力状态。

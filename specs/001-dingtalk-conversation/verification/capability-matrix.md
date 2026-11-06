@@ -12,8 +12,8 @@ mock Harness/适配器版本均为 1；fake 平台版本 1。WorkBuddy 桌面版
 | timelySteer | running/waiting_input 当前 Run 内实际消费；拒绝排队/原任务结束后才消费；候选真实适配器已合成验证原 Run 注入回执及晚确认 | 两条补充在 running（含同文不同本地输入 ID）、受控长工具、问题待答及受控报告后期均已观察原任务内生效；另有 idle/stale、斜杠拒绝及自有连接故障注入 unknown 样本。权限等待、完整重连/恢复及其他时序/整条链路仍缺证，整体 blocked / unverified |
 | inputCorrelation | 快速 handle、accepted/applied、晚确认与冲突；已核验注入边和原 messageRequestId 同时约束输出，后续控制使用当前厂商 owner | 连续两条 running steer 及同文不同输入 ID 均已观察独立操作/消费回执和原提交内输出；故障注入 unknown 在私有 SQLite 重开及对象重建后没有增加 RPC/POST，但不等于跨进程恢复。完整状态和恢复范围仍缺证，整体 blocked / unverified |
 | explicitCompletion | 可靠终态独立于文本和流关闭 | 真实文本任务有 stopReason、isProcessing=false；另有完成后控制明确 idle 拒绝、约 5.2 秒观察无新工作样本；完整终态/竞态仍 unverified |
-| typedVisibleOutput | 3/1/2/0 策略、未知内容隔离 | ACP 无可靠逐文本分类；普通 Hook 已观察原 Run 的 Stop 完整正文及 FinalStop，仍无完整逐消息分类桥接；执行阶段不能替代分类，代码强制 unverified |
-| messageAssembly | 0..N、N=-1、乱序、重投、正常重复、尾片段与冲突 | ACP 有 messageId，Hook 没有逐消息/片段身份；自有转录另观察到 FinalStop 时本轮完整消息和身份，Stop 时可落后。稳定片段/重投/结束桥接仍未验证，代码强制 unverified |
+| typedVisibleOutput | 3/1/2/0 策略、未知内容隔离 | 普通 ACP 文本仍无可靠分类；显式 MCP 纯格式化来源已实现并局部观察 progress/progress/final，类型来自工具结构化字段。日常配置、steer/恢复等完整范围未准入，代码强制 unverified |
+| messageAssembly | 0..N、N=-1、乱序、重投、正常重复、尾片段与冲突 | 显式格式化来源以原生 toolCallId 和 completed/结果回显组成完整快照；两个同文调用已各保留，final 与 Run 分开。重放/交叠/重启等仍缺证；普通 Hook 不能作为转录刷新屏障，代码强制 unverified |
 | humanInteraction | 问答/批准/拒绝、原映射、未知与撤销恢复；原工具关联、双通道合并、原调用明确 receipt | 正常桌面问题/待答 steer、原始 ACP 单选题/答案明确接收/原 Run 续行已有独立观察；另有原始 ACP 一次权限拒绝明确接收及原 Run 取消。cancelled 待答撤销已修复；批准、更多拒绝/恢复及完整 Courier/钉钉链路仍缺证，代码强制 unverified |
 | inspectOperation | fixture 可为指定操作提供权威只读证据；默认不宣称通用查询支持 | not_tested / unverified |
 | replayEvents | 合成可靠事件重投幂等；缺身份不声称重播 | not_tested / unverified |

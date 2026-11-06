@@ -19,7 +19,9 @@
 | 原始 ACP 连接 | 自有合成测试进程的回环 HTTP/SSE 订阅与 initialize 已由生产适配器完成；原 Harness 会话 load 明确返回 writer_occupied | 实验发现入口仍未生产化；正常写入权交接与原始 ACP 执行仍需验证，不重建 Harness 会话或强夺其他客户端控制权 |
 | ACP session/new | 首次 new 使用 CLI 启动标识；2026-11-06 显式初始化本次自有启动 Harness 会话后，同一 ACP 连接再次新建取得不同标识；生产适配器执行、正常断连/load 及上下文恢复均已独立复现 | 首次返回已知标识的冲突保护保留；初始化未知/不匹配即停止。新路径仍未建立正常发现/激活和生命周期契约，也不证明桌面原 Harness 会话写入权交接，详见接口补充调查 |
 | 文本事件 | 已定位转换路径会产生普通文本与消息 ID；独立样本未见可靠 progress/final 分类，若干模型结束事件在转换中没有生成文本类型标识 | 普通文本保持 message；不猜最后一条就是 final。稳定片段身份和独立逻辑消息结束仍缺少可靠映射，G-H-OUTPUT 保持未准入 |
-| 普通 Hook / 转录 | 两个原 Run 的 session_id/generation_id、Stop 完整正文及 completed 的 FinalStop 已独立观察；自有转录在 Stop 时可能尚无本轮完整回答，到 FinalStop 才出现本轮消息身份。当前未找到新版 Mods 加载入口 | Hook 无逐消息/片段字段；转录没有本次所需分类，不能按相同文本、旧记录或到达次序补齐。完整桥接仍未准入，见 hook-output-2026-11-06.md |
+| 普通 Hook / 转录 | 原 Run 的 session_id/generation_id、Stop 完整正文及 completed 的 FinalStop 已独立观察；补充样本显示 Stop 和 FinalStop 时均可能尚无本轮完整转录，不能作为写入屏障。当前未找到新版 Mods 加载入口 | Hook 无逐消息/片段字段；转录被检查字段未提供所需分类，reasoning、文件快照和自动标题不能充当用户进度。不能按相同文本、旧记录或到达次序补齐。完整桥接仍未准入，见 hook-output-2026-11-06.md |
+| HTTP 结果 / Runs | 四次不含 prompt 的只读结果均属于不同于原目标的 Harness 会话，全部拒绝；本机 Gateway Runs 执行分支会等待空闲并设 BypassPermissions | 不借用其他 Harness 结果，也不使用该执行分支绕过当前任务或权限。没有调用该分支创建任务 |
+| 显式 MCP 格式化 | 仓库正式探测已归一化两个同文 progress 和一个 final；三个原生 toolCallId、原 Run、completed 及回显均匹配，final 先于 Run 终态；受控 steer 的后续输出缺少所需原输入归属，仍隔离 | 日常配置/指纹、steer 输出归属、历史交叠/重放及 Courier 重启仍待完成；普通文本不套用此证据，三项硬门槛仍 unverified，见 formatter-output-2026-11-06.md |
 | 人工输入 | 原生 AskUserQuestion 受 question 能力声明控制；修复握手后已复现原始 ACP 单选题/答案/续行；另观察一次原始 ACP 执行权限拒绝明确接收及原 Run 取消。原工具 cancelled 的待答撤销已修复 | 拒绝路径的原生工具取消标记未出现，不编造。无法映射时安全阻塞；完整 Courier/钉钉、权限批准及恢复仍未验证，humanInteraction 仍 unverified |
 
 原操作意图持久化后结果未知时不重发。客户端消息标识和自有元数据仅用于关联，不当作远端幂等保证。

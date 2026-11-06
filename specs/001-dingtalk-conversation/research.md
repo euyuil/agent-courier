@@ -143,6 +143,18 @@
 - **Alternatives considered**：卡片交互、隐式“同意”、按最近一次提问猜测、完整后台管理站点均不纳入首版。
 - **依据**：A2 至 A8、FR-018 至 FR-024。CLI 为待实现契约，本仓库尚无可运行应用命令。
 
+## R-11：显式 MCP 格式化输出来源（2026-11-06 追加候选）
+
+**候选实现**：保留 ACP 承载 Harness 会话、输入、控制和 Run 终态，另外配置纯格式化 MCP 工具返回 schemaVersion/kind/text。
+类型由明确工具参数提供，消息身份取原生 toolCallId，完成要求原工具 completed 且结果回显一致；普通文本和 reasoning 不借此重新分类。
+MCP 服务不执行模型、不读文件/环境、不发送消息，也不决定权限；工具运行由 Harness 管理。创建与恢复原 Harness 会话均提供相同的 custom 配置。
+
+**依据与限制**：本机编译实现已独立观察两个同文 progress 和一个 final，均有不同原生工具身份与完整回显，final 先于原 Run 终态。
+这提供了新的明确输出来源，但依赖 Agent 使用该工具，日常配置、证据指纹、steer/重放和 Courier 重启仍待完成。
+原必需能力仍 unverified，不将本次局部观察套给未扩展的普通 ACP 文本；详细正/负样本见 verification/formatter-output-2026-11-06.md。
+
+后续已实现正式 --acp-bootstrap-owned-formatter 并独立复现三消息、身份/回显及原 Run 终态分离；正常 load 原 Harness 会话后仍使用同一生产者。受控八进度及两条补充实验虽然收到 accepted/applied，但后续工具缺少所需原输入归属，原生 final 也未带两条补充标记，保持 unverified。日常配置/证据指纹、完整 steer 输出、重放和重启范围仍待完成。
+
 ## 证据登记与真实准入
 
 | 验证项 | 本次获得的证据 | 后续必须取得的证据 | 当前结论 |

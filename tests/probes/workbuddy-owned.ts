@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { AcpConnection } from '../../src/adapters/workbuddy-experimental/connection.js';
 import { WorkBuddyAdapter } from '../../src/adapters/workbuddy-experimental/session.js';
 import { record,string,metaField,internalFrame } from '../../src/adapters/workbuddy-experimental/metadata.js';
@@ -9,6 +10,7 @@ import { ownRuntimeEndpoints,identifyOwnAcpTransport } from './workbuddy-acp.js'
 import { acpQuestionExperiment } from './workbuddy-acp-question.js';
 import { acpPermissionDenialExperiment } from './workbuddy-acp-permission.js';
 import { summarizeClassicHooks } from './workbuddy-classic-hooks.js';
+import { formatterExperiment } from './workbuddy-formatter.js';
 
 interface Diagnostic {evaluate(expression:string,timeout?:number):Promise<unknown>}
 export async function initializeOwnedBootstrap(connection:Pick<AcpConnection,'call'>,cwd:string,bootstrap:string):Promise<'matched'|'identity_mismatch'|'unknown'|'invalid'> {
@@ -24,8 +26,8 @@ export function freshOwnedSession(receipt:unknown,bootstrap:string):string|undef
 }
 const summary=(receipt:Receipt)=>({status:receipt.status,...(receipt.status==='accepted'?{}:{code:receipt.errorCode})});
 export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,options:{initializeBootstrap?:boolean;exerciseQuestion?:boolean;
-  exercisePermission?:boolean;observeHooks?:boolean}={}):Promise<Record<string,unknown>> {
-  const {initializeBootstrap=false,exerciseQuestion=false,exercisePermission=false,observeHooks=false}=options;
+  exercisePermission?:boolean;observeHooks?:boolean;exerciseFormatter?:boolean}={}):Promise<Record<string,unknown>> {
+  const {initializeBootstrap=false,exerciseQuestion=false,exercisePermission=false,observeHooks=false,exerciseFormatter=false}=options;
   const bootstrap=await diagnostic.evaluate(`(async()=>{const p=globalThis.__courierCapabilityProbe;if(typeof p?.sessionId!=='string')return;
     const s=await globalThis.__wbInvoke('session:get',{},p.sessionId);
     return !s?.__wbError&&s?.sessionId===p.sessionId&&s?.cwd===${JSON.stringify(cwd)}&&s?.isProcessing===false?p.sessionId:undefined;})()`);
@@ -38,7 +40,7 @@ export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,op
   let owned:string|undefined,bootstrapReused=false,returnedSession=false,toolFrames=0,typedFrames=0,visibleFrames=0,
     fragmentIdentityFrames=0,promptLinkedFrames=0,rawFailure=false;
   let bootstrapInitialization:Awaited<ReturnType<typeof initializeOwnedBootstrap>>|'not_requested'='not_requested';
-  const build=()=>{
+  const build=(typedFormatterOutput=false)=>{
     const connection=new AcpConnection({endpoint:identified.endpoint!,timeoutMs:5000}),call=connection.call.bind(connection);
     connection.call=(method,params,id,timeout)=>{
       if(method==='session/new')counts.new++;if(method==='session/load')counts.load++;if(method==='session/prompt')counts.prompt++;
@@ -53,7 +55,9 @@ export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,op
       return result;
     };
     const adapter=new WorkBuddyAdapter({connection,store:{get:key=>data.get(key),set:(key,value)=>{data.set(key,value);}},cwd,
-      instanceId:'independent-owned-acp',contextFingerprint:'independent-owned-observation-only',evidence:[],receiptTimeoutMs:20000});
+      instanceId:'independent-owned-acp',contextFingerprint:'independent-owned-observation-only',evidence:[],receiptTimeoutMs:20000,
+      ...(exerciseFormatter?{formatterLaunch:{executable:process.execPath,
+        entrypoint:fileURLToPath(new URL('../../src/adapters/workbuddy-experimental/formatter-server.js',import.meta.url))},typedFormatterOutput}:{})});
     const consume=connection.onMessage;
     connection.onMessage=message=>{
       const params=record(message.params),update=record(params['update']);
@@ -125,8 +129,20 @@ export async function ownedSessionExperiment(diagnostic:Diagnostic,cwd:string,op
     const questionObservation=exerciseQuestion?(contextRoundtripObserved?await acpQuestionExperiment(second,owned):{status:'skipped_incomplete_original_task'}):undefined;
     const permissionObservation=exercisePermission?(contextRoundtripObserved?await acpPermissionDenialExperiment(second,resumedConnection,owned):
       {status:'skipped_incomplete_original_task'}):undefined;
+    let formatterObservation:Record<string,unknown>|undefined;
+    if(exerciseFormatter) {
+      formatterObservation={status:'skipped_incomplete_original_task'};
+      if(contextRoundtripObserved) {
+        await second.disconnect('independent-owned-acp');
+        const {adapter:third,connection:formatterConnection}=build(true);await third.connect();
+        const typedResume=await third.resumeSession({operationId:randomUUID(),sessionRef:owned}).receipt;
+        formatterObservation=typedResume.status==='accepted'?await formatterExperiment(third,formatterConnection,owned):
+          {status:'typed_resume_unverified',resume:summary(typedResume)};
+      }
+    }
     return finish({status:'observed',newSessionDistinct:true,firstRun,resume:summary(resumed),continuation,contextRoundtripObserved,
-      ...(questionObservation?{questionObservation}:{}),...(permissionObservation?{permissionObservation}:{})});
+      ...(questionObservation?{questionObservation}:{}),...(permissionObservation?{permissionObservation}:{}),
+      ...(formatterObservation?{formatterObservation}:{})});
   }catch(error){return finish({status:'unavailable',code:safeCode(error)});}
   finally{await Promise.allSettled(adapters.map(adapter=>adapter.disconnect('independent-owned-acp')));}
 }

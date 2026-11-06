@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync,readFileSync,writeFileSync,rmSync,existsSync,statSync } from 'node:fs';
+import { mkdtempSync,readFileSync,writeFileSync,rmSync,existsSync,statSync,chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { configureClassicHookObservation,hookRecordsName,summarizeClassicHooks } from '../probes/workbuddy-classic-hooks.js';
@@ -56,5 +56,32 @@ test('ambiguous Stop events, incomplete records and unknown fields cannot certif
     writeFileSync(path,original.trimEnd());assert.equal(summarizeClassicHooks(f.cwd,f.session,f.run,f.body)['reason'],'hook_records_incomplete');
     const changed=JSON.parse(rows[0]!);changed.privateState='fixture-private-state';rows[0]=JSON.stringify(changed);
     writeFileSync(path,rows.join('\n')+'\n');assert.equal(summarizeClassicHooks(f.cwd,f.session,f.run,f.body)['status'],'unverified');
+  }finally{f.close();}
+});
+
+test('classic Hook capture stops before an expanded record or cumulative output exceeds its bounds',()=>{
+  const f=fixture();
+  try {
+    const path=join(f.cwd,hookRecordsName);
+    f.call('Stop',{last_assistant_message:('CourierOwnedContext-abcd ').repeat(17000)});
+    assert.equal(existsSync(path),false);
+    f.call('UserPromptSubmit');const row=readFileSync(path,'utf8');
+    const count=Math.floor(1048576/Buffer.byteLength(row));assert.ok(count<4096);
+    const full=row.repeat(count);writeFileSync(path,full);
+    f.call('UserPromptSubmit');assert.equal(readFileSync(path,'utf8'),full);
+    const rowLimit='{}\n'.repeat(4096);writeFileSync(path,rowLimit);
+    f.call('UserPromptSubmit');assert.equal(readFileSync(path,'utf8'),rowLimit);
+  }finally{f.close();}
+});
+
+test('classic Hook capture refuses exposed or incomplete existing output without appending',()=>{
+  const f=fixture();
+  try {
+    f.call('UserPromptSubmit');const path=join(f.cwd,hookRecordsName),row=readFileSync(path,'utf8');
+    chmodSync(path,0o644);f.call('Stop',{last_assistant_message:f.body});
+    assert.equal(readFileSync(path,'utf8'),row);
+    assert.equal(summarizeClassicHooks(f.cwd,f.session,f.run,f.body)['reason'],'hook_records_invalid');
+    chmodSync(path,0o600);writeFileSync(path,row.trimEnd());f.call('FinalStop',{final_stop_reason:'completed'});
+    assert.equal(readFileSync(path,'utf8'),row.trimEnd());
   }finally{f.close();}
 });
