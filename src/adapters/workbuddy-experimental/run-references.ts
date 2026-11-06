@@ -23,17 +23,31 @@ export class WorkBuddyRunReferences {
     return this.ownedOutput(params);
   }
   formattedToolOutput(params:Record<string,unknown>):boolean {
+    return this.toolEvent(params);
+  }
+  toolEvent(params:Record<string,unknown>):boolean {
     const update=record(params['update']);
     if(!['tool_call','tool_call_update'].includes(String(update['sessionUpdate'])))return false;
-    return this.ownedOutput(params);
+    return this.ownedOutput(params,true);
   }
-  private ownedOutput(params:Record<string,unknown>):boolean {
+  interactionEvent(params:Record<string,unknown>):boolean {
+    const update=record(params['update']);
+    if(update['sessionUpdate']!=='session_info_update'||
+      metaField(update['_meta'],'interruptionRequest')===undefined&&metaField(update['_meta'],'permissionResolved')!==true)return false;
+    return this.ownedOutput(params,true);
+  }
+  private ownedOutput(params:Record<string,unknown>,allowProvenOwners=false):boolean {
     const update=record(params['update']);
     if(internalFrame(params,update))return false;
     const ref=requestRef(update)??requestRef(params);if(!ref||!this.owners.has(ref))return false;
-    for(const value of [update['requestId'],metaField(update['_meta'],'conversationRequestId'),metaField(update['_meta'],'requestId')])
-      if(typeof value==='string'&&value!==ref)return false;
+    const origin=string(metaField(update['_meta'],'messageRequestId')??metaField(params['_meta'],'messageRequestId'));
+    const refs=[update['requestId'],metaField(update['_meta'],'conversationRequestId'),metaField(update['_meta'],'requestId')];
+    if(refs.some(value=>typeof value==='string'&&value!==ref)) {
+      // 本版本工具可同时携带原 Run 和已核实的后续拥有者。
+      // 所有字段都必须属于同一证明链，且保留原输入；未知字段不能借此混入。
+      if(!allowProvenOwners||origin!==this.runRef||refs.some(value=>typeof value==='string'&&!this.owners.has(value)))return false;
+    }
     if(ref===this.runRef)return true;
-    return string(metaField(update['_meta'],'messageRequestId')??metaField(params['_meta'],'messageRequestId'))===this.runRef;
+    return origin===this.runRef;
   }
 }

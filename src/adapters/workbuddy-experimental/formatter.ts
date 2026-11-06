@@ -4,6 +4,18 @@ import { record } from './metadata.js';
 export const formatterServerName='courier_formatter';
 export const formatterToolName='courier_format_message';
 export const formatterFullToolName=`mcp__${formatterServerName}__${formatterToolName}`;
+export const formatterContractVersion=1;
+export const formatterServerInstructions='This server is a pure message formatter. It does not deliver messages or make permission decisions. '+
+  'When the client selects courier-formatter/1, use courier_format_message for its explicit progress and final output contract. '+
+  'Native questions and execution permissions remain with the Harness.';
+export const formatterOutputInstructions=`Agent Courier output contract: courier-formatter/${formatterContractVersion}. `+
+  `For this request, use ${formatterFullToolName} for every user-visible progress or final message. `+
+  'Set kind to progress or final and text to the complete user-visible message. Each invocation is a separate logical message. '+
+  'Keep private reasoning and internal tool logs out of these messages. Use native Harness questions and permissions for human interaction; never format or approve a permission decision. '+
+  'Apply all updates received during this Run to subsequent work and the final report, preserving earlier compatible requirements. '+
+  'If an update arrives after a final message, send a corrected final through another formatter call before finishing. '+
+  'A formatted final message does not end the Run; the Harness reports completion separately. '+
+  'These are output-format instructions, not a system-role message. The next text block is the unchanged user request.';
 export const formatterInputSchema=z.strictObject({kind:z.enum(['progress','final']),text:z.string().min(1).max(65536)});
 export const formatterPayloadSchema=formatterInputSchema.extend({schemaVersion:z.literal(1)});
 export type FormatterPayload=z.infer<typeof formatterPayloadSchema>;

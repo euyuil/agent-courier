@@ -78,6 +78,16 @@
 | sessions/:id/history | 本机实现为摘要：每次用户输入后取首条 assistant 内容，截断至 500 字符 | finalReply 字段名不能作为可靠 final 分类或完整输出契约；不能用于补齐输出门槛 |
 | 原生事件到 ACP | convertOpenAIEventContentToAcp 对 response_started/response_done 不产生更新；文本增量和历史消息转换为普通 agent_message_chunk | 需继续寻找可保留消息完成、分类与片段身份的入口；不能用执行阶段、末条文本或摘要字段猜类型 |
 
+## 安装元数据与运行版本的区别
+
+后续静态复核确认，桌面 package.json 声明 5.6.2，cli/package.json 则为 0.0.0；随包 CLI 主文件的 publishConfig.customPackage 声明 2.147.0，其版本输出和 PackageUtils 优先读取该发布元数据。因此不能把 cli/package.json 的占位版本当作实际 CLI 发布版本，也不能只读桌面版本替代 CLI 身份。
+
+当前 ACP initialize 没有报告 agentInfo。另一个 HTTP 控制器的 info 方法优先返回 clientInfoProvider 的 productVersion，再回退 getCliVersion；它还会返回本机环境信息，因此不能把 HTTP version 字段未经来源核对就当作 CLI 版本或直接共享整个响应。health 是进程健康信息，status 则只查询控制器当前活动 Harness 会话；二者均不构成任意原 Harness 会话/Run 的权威查询。
+
+以上为安装代码与元数据事实，没有新调用这些 HTTP 接口，也没有把静态安装元数据当成配置目标运行进程的版本证明。生产适配器仍缺可绑定目标运行身份的版本来源，正常配置的版本门槛没有放宽。
+
+后续再次读取[官方 Open API](https://open.workbuddy.cn/docs/openapi)：本地助理仍列在线、发消息、历史及按原请求答复，所列消息接口没有提供本功能所需的独立本机 Harness 会话选择；返回 ACP 地址的任务接口明确面向云端。另复核[CodeBuddy ACP 文档](https://www.codebuddy.cn/docs/cli/acp)，未据其通用续接和宿主能力说明认定桌面目标已具备所需正常发现/激活或原写入权交接。未发现所需契约不等于证明厂商不存在其他接口；当前门槛继续保留，没有调用真实 Open API 或新增第三方授权。
+
 ## 版本范围
 
 本机真实实验仍为 5.6.2；官方更新日志列出 5.11.0 灰度版本，不能推导本机 Linux 可直接升级，或升级即可修复上述接口缺口。

@@ -5,9 +5,10 @@ import { AcpConnection } from '../../src/adapters/workbuddy-experimental/connect
 import { WorkBuddyAdapter } from '../../src/adapters/workbuddy-experimental/session.js';
 import { record,string } from '../../src/adapters/workbuddy-experimental/metadata.js';
 import { safeCode } from '../../src/domain/errors.js';
+import type { Receipt } from '../../src/adapters/harness/port.js';
 
 interface Diagnostic {evaluate(expression:string,timeout?:number):Promise<unknown>}
-export async function yieldOwnIdleSession(diagnostic:Diagnostic,owner:string):Promise<'confirmed'|'rejected'|'unknown'|'owner_mismatch'|'not_idle'> {
+export async function yieldOwnIdleSession(diagnostic:Diagnostic,owner:string):Promise<'confirmed'|'not_confirmed'|'unknown'|'owner_mismatch'|'not_idle'> {
   try {
     const result=await diagnostic.evaluate(`(async()=>{try{
       const original=${JSON.stringify(owner)},p=globalThis.__courierCapabilityProbe;
@@ -15,9 +16,31 @@ export async function yieldOwnIdleSession(diagnostic:Diagnostic,owner:string):Pr
       const before=await globalThis.__wbInvoke('session:get',{},original);
       if(before?.__wbError||before?.sessionId!==original||before?.isProcessing!==false)return 'not_idle';
       const yielded=await globalThis.__wbInvoke('session:requestYield',{},original);
-      return yielded===true?'confirmed':yielded===false?'rejected':'unknown';
+      return yielded===true?'confirmed':yielded===false?'not_confirmed':'unknown';
     }catch{return 'unknown';}})()`,10000);
-    return ['confirmed','rejected','unknown','owner_mismatch','not_idle'].includes(String(result))?result as Awaited<ReturnType<typeof yieldOwnIdleSession>>:'unknown';
+    return ['confirmed','not_confirmed','unknown','owner_mismatch','not_idle'].includes(String(result))?result as Awaited<ReturnType<typeof yieldOwnIdleSession>>:'unknown';
+  }catch{return 'unknown';}
+}
+export async function releaseOwnIdleSession(diagnostic:Diagnostic,owner:string,cwd:string,initialLoad:Receipt):
+  Promise<'not_requested'|'acknowledged'|'owner_mismatch'|'not_idle'|'pending_input'|'unknown'> {
+  if(initialLoad.status!=='rejected'||initialLoad.errorCode!=='writer_occupied'||!initialLoad.definitelyNotAccepted)return 'not_requested';
+  if(!owner||!cwd)return 'owner_mismatch';
+  try {
+    const result=await diagnostic.evaluate(`(async()=>{try{
+      const original=${JSON.stringify(owner)},p=globalThis.__courierCapabilityProbe;
+      if(p?.sessionId!==original)return 'owner_mismatch';
+      const before=await globalThis.__wbInvoke('session:get',{},original);
+      if(!before||before.__wbError)return 'unknown';
+      if(before.sessionId!==original||before.cwd!==${JSON.stringify(cwd)})return 'owner_mismatch';
+      if(before.isProcessing!==false)return 'not_idle';
+      for(const key of ['pendingPermissions','pendingQuestions','pendingElicitations']){
+        if(!Array.isArray(before[key]))return 'unknown';if(before[key].length)return 'pending_input';
+      }
+      const released=await globalThis.__wbInvoke('session:destroy',{},original);
+      return released===undefined||released===null||released===true?'acknowledged':'unknown';
+    }catch{return 'unknown';}})()`,15000);
+    return ['not_requested','acknowledged','owner_mismatch','not_idle','pending_input','unknown'].includes(String(result))?
+      result as Awaited<ReturnType<typeof releaseOwnIdleSession>>:'unknown';
   }catch{return 'unknown';}
 }
 const initialized='[CodeBuddyCodeBackend] initialize() succeeded';
@@ -105,7 +128,7 @@ export function ownAcpEndpoint(log:string,sessionRef:string):string|undefined {
   }
   return endpoints.size===1?[...endpoints][0]:undefined;
 }
-export async function acpSurfaceExperiment(diagnostic:Diagnostic,logPath:string,cwd:string,processDiscovery=false,handoff=false):Promise<Record<string,unknown>> {
+export async function acpSurfaceExperiment(diagnostic:Diagnostic,logPath:string,cwd:string,processDiscovery=false,handoff=false,releaseHandoff=false):Promise<Record<string,unknown>> {
   const owner=await diagnostic.evaluate("(()=>{const p=globalThis.__courierCapabilityProbe;return typeof p?.sessionId==='string'?p.sessionId:undefined;})()");
   if(typeof owner!=='string'||!owner)return {status:'owner_unverified'};
   const log=readFileSync(logPath,'utf8'),runtime=processDiscovery?ownRuntimeEndpoints(cwd,'/proc',owner):undefined;
@@ -126,14 +149,26 @@ export async function acpSurfaceExperiment(diagnostic:Diagnostic,logPath:string,
     await adapter.connect();const report=await adapter.probe(instanceId);
     let load=await adapter.resumeSession({operationId:randomUUID(),sessionRef:owner}).receipt;
     const initialLoad=load;let yieldStatus:Awaited<ReturnType<typeof yieldOwnIdleSession>>|undefined;
+    let desktopReleaseStatus:Awaited<ReturnType<typeof releaseOwnIdleSession>>|undefined,acpConnectedAfterRelease:boolean|undefined,ownedRuntimesAfterRelease:number|undefined;
     // 仅明确未接收的写入权冲突允许经正常接口交接，再尝试同一原会话一次；unknown 不重放。
     if(handoff&&load.status==='rejected'&&load.errorCode==='writer_occupied'&&load.definitelyNotAccepted) {
       yieldStatus=await yieldOwnIdleSession(diagnostic,owner);
       if(yieldStatus==='confirmed')load=await adapter.resumeSession({operationId:randomUUID(),sessionRef:owner}).receipt;
     }
+    if(releaseHandoff) {
+      desktopReleaseStatus=await releaseOwnIdleSession(diagnostic,owner,cwd,initialLoad);
+      if(desktopReleaseStatus==='acknowledged') {
+        // 释放接口可能终止运行进程；方法完成不等于写入权已交接。
+        for(let attempt=0;attempt<5&&connection.connected;attempt++)await new Promise(resolve=>setTimeout(resolve,100));
+        acpConnectedAfterRelease=connection.connected;ownedRuntimesAfterRelease=ownRuntimeEndpoints(cwd,'/proc',owner).runtimeCount;
+        if(acpConnectedAfterRelease)load=await adapter.resumeSession({operationId:randomUUID(),sessionRef:owner}).receipt;
+      }
+    }
     return {status:'observed',endpointIdentified:true,httpStatus,acpInitialized:true,
       cliVersion:report.cliVersion&&/^\d+\.\d+\.\d+$/.test(report.cliVersion)?report.cliVersion:'unknown',
       ...(handoff?{initialSessionLoad:initialLoad.status,yieldStatus:yieldStatus??'not_requested'}:{}),
+      ...(releaseHandoff?{initialSessionLoad:initialLoad.status,desktopReleaseStatus:desktopReleaseStatus??'not_requested',
+        ...(acpConnectedAfterRelease!==undefined?{acpConnectedAfterRelease}:{}),...(ownedRuntimesAfterRelease!==undefined?{ownedRuntimesAfterRelease}:{})}:{}),
       originalSessionLoad:load.status,...(load.status==='accepted'?{}:{code:load.errorCode}),agentRunStarts:0};
   }catch(error){return {status:'unavailable',endpointIdentified:true,...(httpStatus!==undefined?{httpStatus}:{}),code:safeCode(error),agentRunStarts:0};}
   finally{await adapter.disconnect(instanceId).catch(()=>{});}

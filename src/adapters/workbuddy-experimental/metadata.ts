@@ -13,7 +13,7 @@ export function newRequestRef():string {
 }
 export function internalFrame(params:Record<string,unknown>,update:Record<string,unknown>):boolean {
   const metas=[params['_meta'],update['_meta'],record(update['content'])['_meta']];
-  return metas.some(meta=>['isSubAgent','isTeamMember','parentSessionId','memberEvent','parentToolCallId','teamUpdate','isCompactInternal',
+  return metas.some(meta=>metaField(meta,'mode')==='history'||['isSubAgent','isTeamMember','parentSessionId','memberEvent','parentToolCallId','teamUpdate','isCompactInternal',
     'compactType','isSessionSeparator','rendererHistoryReplay','ownerSnapshotHistoryReplay','historyReplay']
     .some(key=>{const value=metaField(meta,key);return value!==undefined&&value!==false;}));
 }

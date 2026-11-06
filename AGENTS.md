@@ -9,16 +9,23 @@ Agent 在 Harness 中推理并执行任务；模型调用、工具执行和本�
 仓库已包含首个私聊功能的离线通用核心、SQLite 迁移、CLI、mock/fake 适配器和行为测试。
 另有未准入的 WorkBuddy ACP/钉钉适配器、独立能力探测及显式真实观察入口；默认测试不运行真实入口。
 WorkBuddy 独立实验已观察登录、消息标识、显式终态、原生问答及释放后恢复原 Harness 会话；
-当前 181 项离线测试通过；两条补充在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别于原任务内生效已有独立观察。idle/stale 与斜杠拒绝、控制连接故障注入后的 unknown 及私有库重开不再次派发也有独立观察；同进程对象重建不等于 Courier 重启验收，完整运行状态覆盖、权限往返及输出分类仍缺证。
+当前 313 项离线测试通过；两条补充在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别于原任务内生效已有独立观察。idle/stale 与斜杠拒绝、控制连接故障注入后的 unknown 及私有库重开不再次派发也有独立观察；同进程对象重建不等于 Courier 重启验收，完整运行状态覆盖、权限往返及输出分类仍缺证。
+同一已登录实例的两个不同 Harness 会话已分别断连/load 并复现各自未重述的标记，未观察另一会话标记；未验证同时活动的 Run、两个钉钉用户或真实 Courier 重启。见 specs/001-dingtalk-conversation/verification/isolation-2026-11-06.md。
+通用核心另已通过实际 Courier 子进程重建、进程外测试 Harness 续接及五类副作用的 15 个 SIGKILL 窗口；查询关联、并发新事实和终态人工请求收尾已修复。此为离线替身验证，不能替代真实 WorkBuddy/钉钉跨进程验收，见 specs/001-dingtalk-conversation/verification/recovery-2026-11-06.md。
 2026-11-06 已在本版本独立复现：首次 ACP session/new 初始化自有启动 Harness 会话后，同一连接再次显式新建取得不同标识，并能执行、断连及恢复原上下文。已知标识仍不能覆盖原 Courier 关联；正常发现/激活与生命周期、桌面持有的原 Harness 会话写入权交接和完整接入仍未准入。详见 specs/001-dingtalk-conversation/verification/interface-research-2026-11-06.md。
 另已修复 ACP 问题能力握手声明；原始 ACP 原生单选题、答案明确接收及原 Run 续行已有独立复现，不等于完整执行权限往返或真实钉钉验收。
 原始 ACP 的一次执行权限拒绝已明确接收，原 Run 取消已有独立观察；没有批准执行权限。生产适配器已补齐原工具 cancelled 状态的待答撤销，完整权限/恢复及输出语义门槛仍保留；见 specs/001-dingtalk-conversation/verification/permission-denial-2026-11-06.md。
 普通 Hook 的 session_id/generation_id、Stop 正文及 FinalStop 已与两个原 Run 分别匹配；本机未见新版 Mods 加载入口。独立转录观察显示 Stop 和 FinalStop 时均可能尚无本轮完整回答，不能作为转录刷新保证，也不能按文本或旧记录归属；分类与片段门槛仍保留，见 specs/001-dingtalk-conversation/verification/hook-output-2026-11-06.md。
-新增未准入的显式 MCP 纯格式化生产者及 typed 输出模式，创建/恢复均传递相同 custom 配置；正式 --acp-bootstrap-owned-formatter 入口已独立归一为两个同文 progress 和一个 final，并校验结果回显及 Run 终态分离。格式化工具的后续拥有者必须同时具备已核实的 steer 延续和原输入归属；真实受控 steer 样本仍缺后者，不能按当前 Run 猜测接纳。普通文本不因此获得分类，日常配置/steer/重放/重启仍缺证；三项输出/人工能力仍 unverified，见 specs/001-dingtalk-conversation/verification/formatter-output-2026-11-06.md。MCP 工具不发消息、不改权限，模型和工具执行仍属于 Harness。
-真实适配与验收仍受 `specs/001-dingtalk-conversation/plan.md` 的门槛限制；未准入时不开放真实 serve。
+新增未准入的显式 MCP 纯格式化生产者及 typed 输出模式，创建/恢复均传递相同 custom 配置；正式 --acp-bootstrap-owned-formatter 入口已独立归一为两个同文 progress 和一个 final，并校验结果回显及 Run 终态分离。typed 启动请求显式绑定原请求跟踪；独立八进度样本已有两条补充效果，正式运行中样本仍有未通过。原生待答补充另已观察：补充触发第二题、两个答案均明确接收、原 Run end_turn，但最终正文未满足全部受控标记。工具可以同时带原 Run 与已核实后续拥有者，只有各字段均在同一证明链且保留原输入时接受；未知字段不能登记工具、展示问题或撤销原权限请求。普通文本不因此获得分类，完整运行状态、重放/重启仍缺证；三项输出/人工能力仍 unverified，见 specs/001-dingtalk-conversation/verification/formatter-output-2026-11-06.md。MCP 工具不发消息、不改权限，模型和工具执行仍属于 Harness。
+操作者已确认 Courier 独占实际 Harness 会话，桌面只提供空白启动宿主；首版不接管桌面已有用户会话。普通配置已支持 courier-exclusive，适配器先核对并持久初始化 H，再仅允许独立创建且归属 Courier 的 A/B 接收用户输入；未知宿主初始化不重发。更换空白 H2 后恢复原 A 上下文已独立观察。按后续明确要求，该边界已写入 spec.md，FR-003/FR-009 原文保留。普通连接工厂另已支持自动创建 H、按准确启动标识/同用户进程/socket 发现 ACP，持久保存并复用 H；真实样本在 SQLite 重开后只创建一次宿主并恢复原 A。宿主镜像只有逐帧符合持久 Run/输入/已证明 owner 的归属才接受，外来或矛盾字段及未绑定工具结果仍拒绝。后续已加入持久进程身份，确认旧后端结束后自动创建新宿主并恢复原 A；正常预热注册归属另补齐发现路径及 CLI 2.147.0 读取。正式 --acp-automatic-runtime 已用三个独立适配器子进程及相同私有 SQLite 验证原 H/A 复用和后端结束后 H2/原 A 恢复；未知或非正常退出不继续，不批准权限。实际 Courier 应用重启及完整准入仍未完成；见 verification 下 automatic-runtime-2026-11-06.md 与 runtime-recovery-2026-11-06.md。
+新增 --acp-automatic-permission-steer 只允许匹配原请求的拒绝，要求两条补充实际产生可归属输出。早期真实样本停在实际 A 的模式回读；后续专用连接首次 load 原 A 后已确认 default，并观察原权限、两条补充接收和一次拒绝/原 Run 取消，拒绝前实际效果仍缺证。bootstrapPermissionMode=default 的 H 返回配置仍不能代表 A/B；专用连接另核对实际 A，未知配置不重发，未就绪不派发输入。普通真实独占组合已通过 ManagedWorkBuddy 按 A/B 管理这些连接，持久保留原归属及操作/Run 结果；未知不重发、不换建，查询/重放明确不支持。真实文本样本已验证五个原上下文 Run 及私有库重开恢复；自动模式进一步按 Courier 会话隔离空白宿主和后端，已观察 A 待答期间 B 创建/运行及原 A 答案后完成，随后原 A/B 恢复。固定/旧共享宿主不迁移，不能复用该隔离结论；见 verification/permission-wait-2026-11-06.md 、context-connection-2026-11-06.md 与 managed-connections-2026-11-06.md。
+独立后端恢复新增两份真实观察：B 原生问题待答期间正常关闭自有空闲 A 后端，确认旧进程退出后恢复原 A，随后 B 原问题及 A/B 重开续聊通过；另有三个独立生产适配器工作进程，以相同私有 SQLite 验证原 A/B、仅 A 的新宿主以及 B 原后端不变，六个文本 Run 均原生 end_turn。真实 Courier 应用进程及平台整条链路仍未验收；见 verification/managed-recovery-2026-11-06.md。
+自动组合的能力目标已绑定配置桌面实例，三个独立适配器进程及空白宿主替换中保持一致；实际后端归属/版本检查仍保留。完整人工请求可越过未完成普通进度，隐藏未完成输出不挡住最终回复。较早的 default 模式格式化样本停在权限请求，原生文本双问答样本仍缺第二条补充效果；见 verification/managed-output-2026-11-06.md。真实适配与验收仍受 `specs/001-dingtalk-conversation/plan.md` 的门槛限制；未准入时不开放真实 serve。
+私有连接配置已支持 output.mode=acp-text/courier-formatter（后者 contractVersion=1）；模式、输出约定及固定应用代码摘要进入证据指纹，代码变更会使当前探测所用证据失效。typed 模式通过普通 ACP 文本块提供客户端输出约定，原用户输入另块原样保留；MCP 生产者仍不读文件/环境或决定权限。普通请求未提 MCP 工具名的三消息样本已独立通过，但 ACP 未回传 CLI 版本，探测明确使用 null 未知版本上下文，不能借作正常配置的 CLI 版本证据。validate-config 现在也解析私有连接/平台/能力 JSON，不读取凭据内容；切换模式不开放真实服务。
 实际命令为 `npm ci`、`npm run build`、`npm run typecheck`、`npm test`、`npm run test:coverage`；
 状态库和私有配置须在 Git 外。当前支持边界与结果见该功能的 `verification/`。
 不要把模拟、设计或 Spec Kit 材料检查当成真实应用验收。
+显式 --acp-automatic-managed-approve-one-formatter 已在本次单次明确授权后通过真实往返：153 帧、一次 allow、原始明确接收、原工具和消息完成、原 Run end_turn 均核对。此前三份未通过观察均为零批准，后续修复了探测器对权限相关 UUID、无 Run 广播和增量参数的解释，并要求 toolArgumentsComplete。该单次授权已使用，不批准后续调用；默认缺决定不激活后端，持续/重复决定仍在网络前拦截，不得将其视为自动批准策略。见 specs/001-dingtalk-conversation/verification/formatter-permission-2026-11-06.md。
 
 后续实现仍须遵守下述项目边界；已有离线核心不代表真实能力已经受支持。
 

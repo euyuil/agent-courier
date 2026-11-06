@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ownAcpEndpoint,ownRuntimeEndpoints,identifyOwnAcpTransport,yieldOwnIdleSession } from '../probes/workbuddy-acp.js';
+import { ownAcpEndpoint,ownRuntimeEndpoints,identifyOwnAcpTransport,yieldOwnIdleSession,releaseOwnIdleSession } from '../probes/workbuddy-acp.js';
+import type { Receipt } from '../../src/adapters/harness/port.js';
 import { runInNewContext } from 'node:vm';
 import { mkdtempSync,mkdirSync,writeFileSync,symlinkSync,rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,7 +68,46 @@ test('normal yield observation only mutates its own idle Harness session once an
     }})};
     const observed=await yieldOwnIdleSession(diagnostic,'own');
     assert.equal(observed,scenario==='foreign'?'owner_mismatch':scenario==='busy'||scenario==='foreign_snapshot'?'not_idle':
-      scenario==='true'?'confirmed':scenario==='false'?'rejected':'unknown');
+      scenario==='true'?'confirmed':scenario==='false'?'not_confirmed':'unknown');
     assert.equal(calls.filter(method=>method==='session:requestYield').length,['foreign','busy','foreign_snapshot'].includes(scenario)?0:1);
+  }
+});
+
+const writerConflict:Receipt={status:'rejected',errorCode:'writer_occupied',definitelyNotAccepted:true};
+function releaseFixture(scenario:string) {
+  const calls:string[]=[];
+  const diagnostic={evaluate:async(expression:string)=>await runInNewContext(expression,{globalThis:{
+    __courierCapabilityProbe:{sessionId:scenario==='foreign'?'other':'own'},
+    __wbInvoke:async(method:string,_context:unknown,session:string)=>{
+      assert.equal(session,'own');calls.push(method);
+      if(method==='session:get')return {sessionId:scenario==='snapshot'?'other':'own',cwd:scenario==='cwd'?'other':'synthetic-workspace',
+        isProcessing:scenario==='busy'?true:scenario==='unknown-idle'?undefined:false,
+        pendingPermissions:scenario==='permission'?[{}]:[],pendingQuestions:scenario==='question'?[{}]:[],pendingElicitations:scenario==='elicitation'?[{}]:scenario==='missing-pending'?undefined:[]};
+      assert.equal(method,'session:destroy');
+      if(scenario==='throw')throw new Error('private native error');
+      return scenario==='error'?{__wbError:'private-error'}:scenario==='false'?false:scenario==='opaque'?{queued:true}:undefined;
+    },
+  }})};
+  return {diagnostic,calls};
+}
+test('desktop release acknowledgement is scoped to one idle owned session after explicit writer conflict',async()=>{
+  const f=releaseFixture('normal');
+  assert.equal(await releaseOwnIdleSession(f.diagnostic,'own','synthetic-workspace',writerConflict),'acknowledged');
+  assert.deepEqual(f.calls,['session:get','session:destroy']);
+});
+test('desktop release never closes a foreign, busy, pending or incompletely inspected session and never retries uncertainty',async()=>{
+  for(const scenario of ['foreign','snapshot','cwd','busy','unknown-idle','permission','question','elicitation','missing-pending','error','false','opaque','throw']) {
+    const f=releaseFixture(scenario),result=await releaseOwnIdleSession(f.diagnostic,'own','synthetic-workspace',writerConflict);
+    assert.notEqual(result,'acknowledged',scenario);
+    assert.equal(f.calls.filter(call=>call==='session:destroy').length,['error','false','opaque','throw'].includes(scenario)?1:0,scenario);
+    assert.equal(JSON.stringify(result).includes('private'),false);
+  }
+});
+test('desktop release does not inspect or modify a target after an accepted, unknown or unrelated rejected load',async()=>{
+  for(const receipt of [{status:'accepted',sessionRef:'own',receiptEvidence:'synthetic'},
+    {status:'unknown',errorCode:'state_unknown'},{status:'rejected',errorCode:'resume_unsupported',definitelyNotAccepted:true}] as Receipt[]) {
+    let calls=0;
+    assert.equal(await releaseOwnIdleSession({evaluate:async()=>{calls++;throw new Error('unexpected access');}},'own','synthetic-workspace',receipt),'not_requested');
+    assert.equal(calls,0);
   }
 });

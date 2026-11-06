@@ -57,6 +57,9 @@ export class WorkBuddySteering {
     if(conversation!==undefined&&conversation!==operation.ownerRef)return;
     if(native!==operation.ownerRef&&(conversation!==operation.ownerRef||metaField(update['_meta'],'messageRequestId')!==input.inputId))return;
     if(typeof update['requestId']==='string'&&update['requestId']!==native)return;
+    const content=record(update['content']);
+    // 本版本注入广播携带完整文本；仅有标识或不完整正文不能证明原输入已注入。
+    if(content['type']!=='text'||content['text']!==input.text)return;
     const transition={ownerRef:operation.ownerRef,nextRef:native};
     if(operation.status==='applied') {
       if(operation.transition?.nextRef!==native)this.conflict(input);return;

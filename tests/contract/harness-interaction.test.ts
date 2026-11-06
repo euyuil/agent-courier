@@ -29,3 +29,24 @@ test('request/message kind conflicts block the original body in either arrival o
     assert.equal((r.db.prepare('SELECT status FROM harness_bindings').get() as {status:string}).status,'unknown');
   }finally{await r.dispose();}}
 });
+
+test('an assembling ordinary output cannot prevent a complete question or permission from being delivered and answered in the original Run',async()=>{
+  for(const kind of ['question','permission'] as const)for(const messageFirst of [false,true]){
+    const r=rig();try{
+      await r.courier.accept(r.platform.inbound());const [ref,state]=[...r.harness.sessions][0]!,run=state.activeRun!;
+      r.harness.emit(ref,run,'message.started',{messageId:'unfinished-progress',kind:'progress',userVisible:true,logicalOrder:0});
+      const original=request(r,kind,{messageFirst});await r.courier.flush();
+      assert.equal(r.platform.visible.length,1);assert.match(r.platform.visible[0]!.payload,/synthetic request body/);
+      assert.equal(r.harness.count('answer'),0);
+      const pending=r.db.prepare('SELECT publicCode FROM pending_inputs').get() as {publicCode:string};
+      await r.courier.accept(r.platform.inbound(kind==='question'?`/答复 ${pending.publicCode} synthetic answer`:`/批准 ${pending.publicCode} O1`));
+      assert.equal(r.harness.count('answer'),1);assert.equal(r.harness.count('start'),1);assert.equal(r.harness.count('create'),1);
+      const answer=r.harness.calls.find(call=>call.kind==='answer')!.input as {sessionRef:string;runRef:string;vendorRequestId:string};
+      assert.equal(answer.sessionRef,ref);assert.equal(answer.runRef,run);assert.equal(answer.vendorRequestId,original.id);
+      r.harness.emit(ref,run,'message.fragment',{messageId:'unfinished-progress',fragmentKey:'progress:0',fragmentIndex:0,text:'completed progress'});
+      r.harness.emit(ref,run,'message.completed',{messageId:'unfinished-progress',finalFragmentIndex:0});
+      r.harness.message(ref,run,'final','completed final');r.harness.complete(ref);await r.courier.flush();
+      assert.deepEqual(r.platform.visible.slice(1).map(value=>value.payload),['completed progress','completed final']);
+    }finally{await r.dispose();}
+  }
+});

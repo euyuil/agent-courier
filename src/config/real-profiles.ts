@@ -11,5 +11,18 @@ export const limitsSchema=z.strictObject({maxTextLength:z.number().int().positiv
     count:z.number().int().positive(),windowMs:z.number().int().positive()})),evidenceRef:z.string().min(1)});
 export const platformProfileSchema=z.strictObject({productVersion:z.literal('dingtalk-stream@2.1.5'),adapterVersion:z.literal('1'),
   authorizationScope:z.array(z.string()),limits:limitsSchema,evidence:z.array(evidenceSchema)});
-export const connectionProfileSchema=z.strictObject({endpoint:z.string().url(),cwd:z.string().min(1),authTokenRef:z.string().optional(),
-  cliVersion:z.string().min(1),authorizationScope:z.array(z.string()),desktopDebugUrl:z.string().url().optional()});
+export const connectionProfileSchema=z.strictObject({endpoint:z.string().url().optional(),cwd:z.string().min(1),authTokenRef:z.string().optional(),
+  cliVersion:z.string().min(1),authorizationScope:z.array(z.string()),desktopDebugUrl:z.string().url().optional(),
+  ownership:z.strictObject({mode:z.literal('courier-exclusive'),bootstrapSessionRef:z.string().min(1).optional()}).optional(),
+  bootstrapPermissionMode:z.literal('default').optional(),
+  output:z.discriminatedUnion('mode',[
+    z.strictObject({mode:z.literal('acp-text')}),
+    z.strictObject({mode:z.literal('courier-formatter'),contractVersion:z.literal(1).default(1)}),
+  ]).default({mode:'acp-text'})}).superRefine((profile,ctx)=>{
+    if(profile.ownership&&!profile.desktopDebugUrl)ctx.addIssue({code:'custom',path:['desktopDebugUrl'],message:'exclusive bootstrap verification required'});
+    const automatic=profile.ownership&&!profile.ownership.bootstrapSessionRef;
+    if(profile.bootstrapPermissionMode&&!automatic)ctx.addIssue({code:'custom',path:['bootstrapPermissionMode'],message:'startup permission mode requires automatic bootstrap'});
+    if(automatic&&profile.endpoint)ctx.addIssue({code:'custom',path:['endpoint'],message:'automatic bootstrap discovers its own endpoint'});
+    if(!automatic&&!profile.endpoint)ctx.addIssue({code:'custom',path:['endpoint'],message:'configured endpoint required'});
+  });
+export type ConnectionProfile=z.infer<typeof connectionProfileSchema>;

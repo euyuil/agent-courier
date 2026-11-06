@@ -1,7 +1,7 @@
 import type { Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import { record } from './metadata.js';
-import { formatMessage,formatterTool,formatterToolName } from './formatter.js';
+import { formatMessage,formatterTool,formatterToolName,formatterServerInstructions } from './formatter.js';
 
 export const formatterLineLimit=1048576;
 const supportedVersions=new Set(['2024-11-05','2025-03-26','2025-06-18']);
@@ -20,7 +20,7 @@ export class FormatterServer {
       if(typeof params['protocolVersion']!=='string')return error(id,-32602,'Invalid initialization');
       this.initialized=true;
       return result({protocolVersion:supportedVersions.has(params['protocolVersion'])?params['protocolVersion']:'2025-06-18',
-        capabilities:{tools:{}},serverInfo:{name:'Agent Courier message formatter',version:'1'}});
+        capabilities:{tools:{}},serverInfo:{name:'Agent Courier message formatter',version:'1'},instructions:formatterServerInstructions});
     }
     if(request['method']==='ping')return result({});
     if(!this.initialized)return error(id,-32000,'Initialization required');

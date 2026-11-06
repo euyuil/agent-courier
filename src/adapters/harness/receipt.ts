@@ -4,7 +4,10 @@ export function normalizeReceipt(value:Receipt,expected:{sessionRef?:string;runR
   const unknown:Receipt={status:'unknown',errorCode:'protocol_conflict'};
   if(!value || typeof value!=='object')return unknown;
   if(value.status==='accepted') {
-    if(!value.sessionRef || !value.receiptEvidence || (expected.sessionRef&&value.sessionRef!==expected.sessionRef)
+    if(typeof value.sessionRef!=='string'||!value.sessionRef || typeof value.receiptEvidence!=='string'||!value.receiptEvidence
+      || (value.runRef!==undefined&&(typeof value.runRef!=='string'||!value.runRef))
+      || (value.vendorRequestId!==undefined&&(typeof value.vendorRequestId!=='string'||!value.vendorRequestId))
+      || (expected.sessionRef&&value.sessionRef!==expected.sessionRef)
       || (expected.requiresRun&&!value.runRef) || (expected.runRef&&value.runRef!==expected.runRef)
       || (expected.requestId&&value.vendorRequestId!==expected.requestId))return unknown;
     return value;

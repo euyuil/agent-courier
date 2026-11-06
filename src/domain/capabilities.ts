@@ -18,6 +18,7 @@ export interface HarnessInstance {
 export interface EvidenceContext {
   targetRef: string; cliVersion: string | null; transportKind: string;
   authorizationScope: string[] | null; limitProfile: unknown;
+  outputProfile?:unknown;
 }
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) {

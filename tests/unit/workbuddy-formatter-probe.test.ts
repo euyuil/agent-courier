@@ -98,3 +98,28 @@ test('formatter probe never retries or upgrades an unknown start',async()=>{
   const report=await formatterExperiment(adapter,connection,'own-session',50);
   assert.equal(report['status'],'unverified');assert.deepEqual(report['start'],{status:'unknown',code:'state_unknown'});assert.equal(starts,1);
 });
+
+test('formatter recall checks a prior final without repeating it in the new prompt or exposing the observation',async()=>{
+  const expected='fixture-private-previous-final',listeners=new Set<(event:HarnessEvent)=>void>();
+  let resolvePrompt!:(value:unknown)=>void,observed:FormatterObservation|undefined;
+  const connection:Pick<AcpConnection,'call'|'onMessage'>={onMessage:()=>{},call:async()=>new Promise(resolve=>{resolvePrompt=resolve;})};
+  const previousCall=connection.call,previousMessage=connection.onMessage;
+  const emit=(eventType:HarnessEvent['eventType'],payload:unknown)=>{for(const listener of listeners)listener({schemaVersion:1,eventKey:eventType,
+    sessionRef:'own-session',runRef:'new-run',eventType,payload} as HarnessEvent);};
+  const adapter:Pick<HarnessPort,'start'|'subscribe'>={subscribe:(_session,listener)=>{listeners.add(listener);return ()=>{listeners.delete(listener);};},
+    start:input=>{
+      assert.equal(input.text.includes(expected),false);
+      void connection.call('session/prompt',{},input.operationId);
+      const raw=(update:unknown)=>connection.onMessage({jsonrpc:'2.0',method:'session/update',params:{sessionId:'own-session',update}});
+      raw({sessionUpdate:'tool_call',toolCallId:'private-new-tool',rawInput:{kind:'final',text:expected},_meta:{'codebuddy.ai/requestId':'new-run','codebuddy.ai/toolName':formatterFullToolName}});
+      raw({sessionUpdate:'tool_call_update',toolCallId:'private-new-tool',status:'completed',rawOutput:{text:JSON.stringify({schemaVersion:1,kind:'final',text:expected})}});
+      const messageId='formatter:private-new-tool';emit('message.started',{messageId,kind:'final',userVisible:true,logicalOrder:0});
+      emit('message.fragment',{messageId,fragmentKey:`${messageId}:snapshot`,fragmentIndex:0,text:expected});emit('message.completed',{messageId,finalFragmentIndex:0});
+      emit('run.completed',{completionEvidence:'synthetic',stopReason:'end_turn'});resolvePrompt({stopReason:'end_turn'});
+      return {operationId:input.operationId,receipt:Promise.resolve({status:'accepted',sessionRef:'own-session',runRef:'new-run',receiptEvidence:'synthetic'})};
+    }};
+  const report=await formatterExperiment(adapter,connection,'own-session',100,true,{recallFinalText:expected,observe:value=>{observed=value;}});
+  assert.equal(report['status'],'observed');assert.equal(observed?.finalText,expected);assert.equal(observed?.runRef,'new-run');
+  assert.equal(JSON.stringify(report).includes('fixture-private'),false);assert.equal(JSON.stringify(report).includes('private-new-tool'),false);
+  assert.equal(connection.call,previousCall);assert.equal(connection.onMessage,previousMessage);assert.equal(listeners.size,0);
+});

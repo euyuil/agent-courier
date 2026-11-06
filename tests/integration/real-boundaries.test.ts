@@ -35,8 +35,14 @@ test('unadmitted composition reads no credential and creates no synthetic capabi
       authorizationScope:[],limits:{maxTextLength:100,lengthUnit:'codepoints',routeTotal:3,rates:[],evidenceRef:'synthetic'},evidence:[]}}))
       writeFileSync(join(dir,name),JSON.stringify(value),{mode:0o600});
     assert.equal(loadConfig(file).platform.clientIdRef,'env:COURIER_SYNTHETIC_CLIENT');
-    await assert.rejects(composeReal(cfg,file,db),{message:'capability_unverified'});
-    for(const table of ['capability_evidence','harness_instances','delivery_routes'])assert.equal((db.prepare(`SELECT count(*) n FROM ${table}`).get() as {n:number}).n,0);
+    for(const output of [{mode:'acp-text'},{mode:'courier-formatter',contractVersion:1}])for(const transport of [
+      {endpoint:'http://127.0.0.1:1/api/v1/acp'},
+      {desktopDebugUrl:'http://127.0.0.1:1',ownership:{mode:'courier-exclusive'}},
+    ]) {
+      writeFileSync(join(dir,'connection.json'),JSON.stringify({...transport,cwd:'.',cliVersion:'synthetic',authorizationScope:[],output}),{mode:0o600});
+      await assert.rejects(composeReal(cfg,file,db),{message:'capability_unverified'});
+    }
+    for(const table of ['capability_evidence','harness_instances','delivery_routes','adapter_mappings'])assert.equal((db.prepare(`SELECT count(*) n FROM ${table}`).get() as {n:number}).n,0);
   }finally{db.close();rmSync(dir,{recursive:true});}
 });
 test('private credential references require owner-only files and explicit environment names',()=>{

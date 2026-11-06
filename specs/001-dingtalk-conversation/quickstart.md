@@ -218,7 +218,17 @@ npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PRO
 `--acp-process-surface` 改为核对 Linux 自有测试运行进程、显式原会话参数及监听 socket 归属，不读取进程环境或内存。
 两种入口都先建立并关闭自己的协议订阅，再由生产适配器 initialize/load 原 Harness 会话，不提交额外 Agent 任务。
 `--acp-handoff` 仅在 load 明确返回 writer_occupied 时，向本次空闲原 Harness 会话提交一次正常 requestYield；
-只有明确确认才重新加载同一原会话一次，结果未知时不重放。当前真实调用返回拒绝，写入权交接仍未通过。
+只有明确确认才重新加载同一原会话一次，结果未知时不重放。当前真实调用返回 false；桌面桥接层可将异常折叠为 false，因此现记录 not_confirmed，不把它当成明确拒绝。写入权交接仍未通过。
+
+单独观察正常后端释放是否保留原 ACP 连接：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-release-handoff
+```
+
+该选项与 --acp-handoff 互斥，属于独立 ACP 表面观察。只在本次自有合成任务明确结束、原 load 明确 writer_occupied 且未接收后，再核对原 Harness 会话、工作目录、isProcessing=false 及权限/问题/elicitation 三类待处理数组均为空，才调用一次正常 session:destroy。其安装实现默认保留历史，但会释放后端并请求终止运行进程；该选项只操作探测自己的空闲后端。
+方法完成仅记录 acknowledged，随后分别观察原 ACP 连接和自有运行进程计数。只有原连接仍存活时才加载同一原 Harness 会话一次；连接关闭或结果未知时停止，不重连、不新建替代目标，也不提交额外 Agent 输入。真实样本已观察方法完成、原连接关闭、自有运行进程计数为零，没有第二次 load；这条路径未实现所需写入权交接。完整范围见 verification/writer-lifecycle-2026-11-06.md。
+
 `--acp-owned-run` 是另行显式新建实验，不能与其他任务选项同时使用，也不是 load 失败后的回退。
 只有新建明确接受、返回标识不同于桌面启动用 Harness 会话，才可提交合成任务；首轮内容及终态均确认后，才正常断连并尝试一次恢复同一新 Harness 会话，最后核对上下文。
 当前实际仅调用一次 session/new，回传了启动用 Harness 会话标识，被本地保护判为 unknown/protocol_conflict；零 load/prompt，后续任务与恢复均未执行。不能据此声明独立会话、写入权或输出协议已受支持。
@@ -294,11 +304,155 @@ npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PRO
 
 该选项与其他独立任务模式互斥。它先核对两轮普通任务的独立创建、恢复及上下文，再正常断连/load 原 Harness 会话，以显式 typed 模式请求两次同文 progress 和一次 final。
 创建和每次恢复均配置同一纯格式化生产者；核对原生调用身份、结果回显、三条完整快照和独立的原 Run end_turn。遇到人工请求即保留未验证，不回答或批准；未知结果不重试，不发送钉钉消息。
-它需要 Agent 明确调用纯格式化工具，尚无日常 serve 配置；默认不启动，也不能据此跳过真实服务门槛。
-正式入口已局部观察上述三条输出；独立 steer 样本仍未通过原输入归属及补充内容检查，范围与后续验证见 verification/formatter-output-2026-11-06.md。
+它需要 Agent 使用纯格式化工具；当前私有连接配置已提供显式模式和随请求发送的输出约定，默认不启动，也不能据此跳过真实服务门槛。
+正式入口已局部观察上述三条输出；早期独立 steer 样本未通过原输入归属及补充内容检查，修复后的观察和正式补充探测另记于 verification/formatter-output-2026-11-06.md。
+
+新增运行中格式化输出观察，单独运行，不与三消息模式组合：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-bootstrap-owned-formatter-steer
+```
+
+它先验证相同的两轮上下文，再要求八条按序 progress 和一条 final。第一条进度完成、原 Run 仍运行且无人工请求时，连续提交两条不同补充，要求它们修改同一条 final 正文。
+通过条件同时检查原始控制响应、每条注入的拥有者延续、各调用保留原输入归属、九条完整消息和原生结果回显，以及两条补充都出现在 final 中且早于原 Run end_turn。额外 final、缺标记、错归属或截断均保留未验证。
+typed 模式显式提供原请求跟踪字段；这不提供幂等保证，不允许 unknown 重发。记录限制为 4096 帧/事件及 120 秒；遇到人工请求停止观察，不回答或批准，不发送钉钉消息。该模式不代表完整运行状态或 Courier 重启准入。
+
+本版本工具的 conversationRequestId 与 requestId 可以分别指向原 Run 和已核实的后续拥有者；通过条件要求每个字段都已由此前注入证明归属同一原 Run，并保留原 messageRequestId，不要求两个字段机械相等。证明尚未到达、含未知拥有者、成员或历史帧仍不能接纳。
+脱敏诊断仅输出请求字段关系、首个可解析 final 参数/完成帧相对控制和注入的到达次序，以及普通可见文本对受控标记的匹配布尔值。参数帧到达不证明模型内部生成时点；普通文本也不替代类型输出证据。元数据矛盾明细最多 32 条，同时报告总数和明细是否完整；截断不伪称完整诊断。
+
+私有 `connectionProfileRef` 文件现在可额外选择：
+
+```json
+{"output":{"mode":"courier-formatter","contractVersion":1}}
+```
+
+这是附加到原连接配置的片段，其余 endpoint/cwd/cliVersion/authorizationScope 等字段仍须正常配置；文件和目录仍位于 Git 外并使用私有权限。不写 output 时默认为 acp-text，不允许自定义生产者命令、自由输出规则或未支持的契约版本。
+正常组合使用当前 Node 和同包的 formatter-server.js，创建/恢复均传同一生产者；每次 typed 启动提交两个普通 ACP text 内容块：固定输出约定和原样用户输入。它们属于客户端请求内容，角色优先级由 Harness 处理；没有新增 Agent loop、模型调用或权限决定。
+模式、契约版本、固定相关代码摘要和 Node 版本均参与证据指纹，普通文本、格式化及旧版无输出配置的指纹不能互换；当前实例探测还会核对代码摘要是否变化，变化或读取失败时全部必需能力保持 unverified，需要重启并重新取得对应证据。
+`validate-config` 现在解析连接、平台限额及 Harness 证据 JSON 的结构，不读取 client ID/secret 或令牌内容，也不做网络探测；配置结构通过与能力准入分别检查。真实组合仍在 Stream 注册前拒绝缺证目标。
+
+操作者确认的 Courier 独占模式可在私有连接配置增加：
+
+```json
+{"ownership":{"mode":"courier-exclusive","bootstrapSessionRef":"<EMPTY_BOOTSTRAP_HARNESS_SESSION_ID>"}}
+```
+
+这是手动提供 H 与 endpoint 的模式，同时要求正常配置 desktopDebugUrl。H 必须是已登录桌面的空白启动宿主；适配器会核对原标识、cwd、明确空闲、三类人工待处理为空及无独立用户任务历史，不能引用用户正在使用的桌面对话。初始化 H 的意图先持久化，返回准确 H 后才允许正常 createSession 创建不同的 A/B。
+H 不能承接用户输入，未知/未归属 Courier 的引用也不能 load/start；初始化 unknown/dispatching 不因对象重建重发。模式参与证据指纹，不能沿用普通模式的证据。
+
+自动激活模式改用以下片段，并省略 endpoint 和 bootstrapSessionRef；仍需已启动且登录的桌面、有效 desktopDebugUrl、与桌面一致的绝对 cwd、声明 CLI 版本和其余普通配置：
+
+```json
+{"ownership":{"mode":"courier-exclusive"}}
+```
+
+工厂会持久登记创建意图，再通过正常桌面 API 创建空白 H，并以准确启动标识或自有预热进程的正常运行注册记录，结合进程所属回环 socket 发现 ACP。已知 H 在下次启动复用；创建结果 unknown/dispatching 时不再创建，已知 H 忙碌或进程状态不明时停止。只有持久进程身份明确证明旧后端已退出才自动创建新空白 H2，保留旧激活记录和原用户 A/B 关联；仅仅找不到端点不能触发替换。自动模式不同时接受固定 endpoint，以免忽略配置或连接到错误进程。
+桌面 SDK 会镜像 Courier 的任务活动。只有能逐帧归属已持久化原 Run、输入和已证明 owner 的镜像可保留，工具结果还须关联原工具；不能按正文或当前任务猜测归属。该检查不放宽空闲/人工待处理条件，也不批准权限。自动模式已独立观察后端退出后的新宿主及原 A 恢复，并从正常自有运行注册元数据核实 CLI 2.147.0。实际 Courier 应用进程重启和完整运行状态恢复仍待验收，见 verification/automatic-runtime-2026-11-06.md 与 verification/runtime-recovery-2026-11-06.md。
+
+新增独立普通请求观察：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-bootstrap-owned-formatter-contract
+```
+
+该模式与其他独立任务模式互斥；基础两轮上下文通过后，第三个 typed 适配器使用正常配置构造器，用户任务只要求两条同文进度和一个最终回答，不提 MCP 工具名。463 帧独立样本已观察三条原生调用/精确回显及归一化消息，原 Run end_turn，零人工请求/权限批准。
+本版本 ACP 没有回传 CLI 版本；该独立观察明确采用 null 未知版本上下文并报告 cliVersionReported=false，其指纹与正常配置声明版本不同，不能将局部结果套成 CLI 版本或真实服务准入证据。正常连接配置仍要求声明版本，并继续核实当前运行版本。
+
+两个独立 Harness 会话的原上下文恢复可单独观察：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-bootstrap-owned-isolation
+```
+
+该模式与其他独立任务模式互斥。前置原 Harness 会话创建/恢复通过后，再显式创建第二个不同 Harness 会话并保存另一个合成标记；正常断连后，用不同适配器与连接分别 load 两个原标识。新输入不重述标记，各自输出须精确匹配本会话标记且不含另一标记；每个任务还须有原始 end_turn、完整有界观察及零工具调用。
+创建、运行或 load 未知、身份复用、标记不符/串线或观察不完整均停止，不重发、不建替代目标、不回答人工请求。此模式使用已登录桌面的自有隔离目录；无工具/文件/网络访问指令属于对 Agent 的任务约束，不代表 Harness 的沙箱保证。共享结果仅含布尔值和计数；不验证同时活动 Run、两个钉钉用户或实际 Courier 进程重启，见 verification/isolation-2026-11-06.md。
+
+格式化输出完成后的原 Harness 会话历史与续接可单独观察：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-bootstrap-owned-formatter-history
+```
+
+该选项与其他独立任务模式互斥。前置两轮原上下文通过后，先验证两条同文 progress 和一条 final；只有原始终态与全部源消息均通过，才正常断开该 Courier ACP 连接。保持自有 Harness 运行进程，新建适配器和 ACP 连接，load 同一个原 Harness 会话，再要求只输出上一轮已格式化的 final；新输入不重述该正文或标记。
+分别核对历史标记、三个原生工具身份和完成结果、无旧逻辑消息重复输出，以及新 Run/工具身份不同且原上下文复现。历史模式 codebuddy.ai.mode=history（flat/nested）在参数、更新和内容元数据上均过滤，不能确认新 Run、改变控制状态或作为实时输出；历史 offset 不当作实时片段身份。
+报告同时记录 load 返回后的历史帧数，不把 load 返回作为跨 HTTP 流的全局回放屏障。原始观察上限为 4096 帧/事件及 8 MiB；两次格式化任务分别使用有界观察。源任务、load 或续接未知均停止，不重发、不新建替代目标、不回答权限请求。该观察覆盖适配器与连接重建，Courier 应用进程未重启；完整范围见 verification/formatter-history-2026-11-06.md。
+
+新增两次问答与待答期间两条补充的正式观察入口：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-bootstrap-owned-formatter-question-steer
+```
+
+该选项与其他独立任务模式互斥。两轮原上下文创建/恢复通过后，第三个 typed 适配器使用同一正常配置构造器，直接启动组合问答 Run；不再通过临时补丁在断连期间追加任务。第一道限定合成单选题待答时提交两条补充，第一条要求再问第二题，第二条要求追加最终标记；只在原生内置工具、题目、选项、原 Run 和各请求通道均匹配后，分别回答预设选项。
+
+通过条件分别核对原始控制响应、完整注入正文与已证明拥有者、两次答复的原始明确回执及对应原生工具完成结果、含全部四项内容的单个原生/归一化 final，以及独立原始 prompt end_turn。未知结果不重试、不换通道；原问题撤销后停止后续控制和答复。发现原始执行权限请求即停止，即使它尚未被适配器标准化；不批准执行权限。问题答复中的 allow 仅用于准确匹配的原生 AskUserQuestion。
+
+观察限于 180 秒、4096 个原始帧/事件和 8 MiB 原始帧序列化总量；截断或超时不能通过。报告只输出有界计数、到达位置、已知状态/结构及受控内容的匹配布尔值，不输出问题、答案、厂商标识或普通正文。到达位置不证明模型内部生成时点；原生工具结果中出现答案也不单独证明后续正文完整保留要求。默认测试只使用合成适配器，不发送真实钉钉消息；独立样本不改变 CLI 版本、正常生命周期或真实服务准入门槛。
 
 ```bash
 npm run test:live -- --enable-live --config "$COURIER_CONFIG" --scope "$LIVE_SCOPE" --output "$LIVE_OUTPUT"
 ```
 
 能力门槛先于 Stream 注册；缺证退出 3，不创建模拟证据。监听时只接受清单用户的本次合成标记或显式答复/权限命令。观察结束返回 5 并记录安全计数，仍需逐场景人工复核，不自动写成 SC-001 至 SC-009 或 37 项验收通过。只有一个真实用户时，只能记录单用户观察。
+
+
+### 独占模式的自动宿主与适配器进程重启观察
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-automatic-runtime
+```
+
+两个引用均须为 Git 外私有位置；输出必须是新文件。该模式与其他任务实验互斥，启动本次独立桌面进程，使用已有正常登录；不读取 .env 或凭据文件。三个独立适配器子进程先后执行首轮、原后端复用及确认旧后端结束后的新宿主恢复。只有首轮/续聊完整通过、原宿主空闲无待处理且归属可核实时，才正常结束本次自有后端；不关闭其他桌面会话，不批准权限或发送钉钉消息。
+
+每个子进程限 120 秒，每轮输入限 90 秒、4096 个事件/帧、8 MiB 原始帧和 64 KiB 单消息正文；未知、不完整、非正常退出、外来/重复身份或无法确认旧进程结束均停止，不重试原操作。报告不输出原始引用、正文或进程信息。当前三个独立适配器进程的真实样本通过，仍不是完整 Courier 应用/钉钉重启或必需能力准入，见 verification/runtime-process-2026-11-06.md。
+
+
+### 启动模式与执行权限等待探测
+
+自动连接配置可以显式请求启动宿主的 default 模式：
+
+```json
+{"ownership":{"mode":"courier-exclusive"},"bootstrapPermissionMode":"default"}
+```
+
+bootstrapPermissionMode 只接受 default，且仅适用于自动新建宿主；固定端点/宿主模式拒绝该字段。正常创建返回值必须明确确认同一模式，已派发但无法确认时保持 unknown。选项参与宿主缓存和证据指纹；模式不匹配不能静默采用旧宿主，也不能通过删库或重建用户上下文绕过。它不证明后续实际用户 Harness 会话 A/B 的模式，尤其不能当作权限批准。
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-automatic-permission-steer
+```
+
+该模式与其他实验互斥，只在本次私有目录配置 Bash ask 规则，并核对实际 A 的 default 模式。通过后才尝试原权限待答期间的两条进度补充，随后只拒绝原权限；不批准执行或发送钉钉消息。早期真实样本停在 A 的模式回读；后续工厂的专用上下文连接已在首次 load 原 A 后确认 default，观察到精确权限、两条补充接收及一次拒绝/原 Run 取消，但拒绝前的两个实际效果仍未通过。结果及边界见 verification/permission-wait-2026-11-06.md 与 verification/context-connection-2026-11-06.md。
+
+工厂内部 contextSessionRef 模式只用于已经归属 Courier 的实际 Harness 会话：先正常释放管理连接，再以专用连接首次 load 原 A，不重新初始化 H。只有原生模式回读明确确认后才允许输入；unknown 配置不重发，外来写入权不抢占。它不是可填写的 JSON 字段。普通独占组合现由 ManagedWorkBuddy 按 A/B 管理连接，持久保留原归属、操作结果和 Run 状态；运行结果 unknown 时不重新加载或执行，真实服务继续受全部准入门槛限制。
+
+连接管理独立观察入口：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-automatic-managed
+```
+
+该模式与其他实验互斥，使用生产连接管理类及正常工厂，在自有 A 等待精确合成问题时创建并运行 B，随后仅回答原问题，并检查私有 SQLite 重开后原 A/B 的未重述上下文。不批准执行权限、不发送钉钉消息；不属于真实 Courier 应用进程或钉钉整条链路验收。
+
+自动模式按 Courier 会话分别启动空白宿主和后端，避免共享后端的上下文交错影响人工答案；实际用户的原 A/B 引用保持不变。固定宿主模式不能复用这项隔离结论。另可用互斥的 --acp-automatic-managed-text 仅检查文本/恢复，或 --acp-automatic-managed-question 仅检查单个原上下文的原生问答。结果及失败对照见 verification/managed-connections-2026-11-06.md。
+
+独立后端恢复的两个入口也与其他实验互斥，分别使用新的 Git 外输出文件：
+
+```bash
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROBE_OUTPUT" --acp-automatic-managed-recovery
+npm run probe:workbuddy -- --enable-live --launch-profile "$WORKBUDDY_LAUNCH_PROFILE" --output "$WORKBUDDY_PROCESS_OUTPUT" --acp-automatic-managed-process
+```
+
+recovery 在 B 原生问题待答期间正常关闭自有空闲 A 后端，确认退出后恢复原 A，再仅答复 B 的精确合成问题。process 使用三个独立适配器进程验证原 A/B、后端复用及仅 A 的宿主替换；父进程必须等到各工作进程真正正常退出。两者不批准执行权限或发送钉钉消息，unknown 不重发。结果及真实 Courier 应用验收的区别见 verification/managed-recovery-2026-11-06.md。
+
+自动组合的输出模式另有四个互斥选项，继续沿用上述私有 launch-profile 和每次新建的 Git 外 output：
+
+| 选项 | 观察范围 |
+| --- | --- |
+| --acp-automatic-managed-formatter | 普通请求的两条同文进度及最终回复；通过后才重开私有库并复述原上下文 |
+| --acp-automatic-managed-formatter-steer | 显式格式化八进度及运行中两条补充 |
+| --acp-automatic-managed-formatter-question-steer | 格式化最终回复、两次原生问答和待答期间两条补充 |
+| --acp-automatic-managed-question-steer | 不依赖格式化工具的普通文本、两次原生问答及相同两条补充效果；不声称类型分类 |
+
+这些选项要求实际用户 Harness 会话确认 default，不批准执行权限。只精确回答本次内置合成问题；出现执行权限请求即停止后续步骤。当前格式化样本停在原生权限请求，原生文本组合仍缺第二条补充效果，均 unverified。process 模式另检查每个工作进程内和进程间的配置目标一致性；私有原始指纹不输出到公开结果。实际记录见 verification/managed-output-2026-11-06.md。
+
+另有 --acp-automatic-managed-approve-one-formatter 准备验证一次实际权限批准；必须先取得操作者对本次准确范围的明确授权，不能从使用已登录 WorkBuddy 的一般授权推定。它仅匹配原 Run 的一个合成 final 格式化调用，在正常 default 模式提交一次 allow-once，不批准其他工具或持续权限；第二次或不符的决定在网络前拒绝。该入口已有一次经明确授权的 153 帧真实往返通过：原始批准接收、原工具及消息完成、原 Run end_turn 均匹配。本次单次额度已使用，不能复用于后续调用；完整人工能力仍未准入。范围及原生字段解释见 verification/formatter-permission-2026-11-06.md。

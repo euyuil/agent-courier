@@ -34,7 +34,8 @@ test('formatter result decoding requires one structured payload and never guesse
 test('formatter MCP negotiation and responses preserve transport IDs without accepting permissions or unsupported operations',()=>{
   const server=new FormatterServer();
   assert.ok(JSON.stringify(server.receive(call(1,'final'))).includes('Initialization required'));
-  assert.equal((server.receive(initialize) as {id:number}).id,0);
+  const initialized=server.receive(initialize) as {id:number;result:{instructions:string}};
+  assert.equal(initialized.id,0);assert.match(initialized.result.instructions,/courier-formatter\/1/);
   const list=server.receive(request('list','tools/list')) as {result:{tools:{annotations:{readOnlyHint:boolean};name:string}[]}};
   assert.equal(list.result.tools.length,1);assert.equal(list.result.tools[0]!.annotations.readOnlyHint,true);
   assert.equal(server.receive({jsonrpc:'2.0',method:'notifications/initialized'}),undefined);

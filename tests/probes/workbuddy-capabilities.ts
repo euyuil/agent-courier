@@ -17,6 +17,12 @@ import { completedSteerExperiment } from './workbuddy-completed-steer.js';
 import { failureBoundariesExperiment } from './workbuddy-failures.js';
 import { configureClassicHookObservation } from './workbuddy-classic-hooks.js';
 import { randomUUID } from 'node:crypto';
+import { automaticRuntimeExperiment } from './workbuddy-runtime.js';
+import { automaticPermissionSteerExperiment } from './workbuddy-permission-steer.js';
+import { automaticManagedExperiment } from './workbuddy-managed.js';
+import { managedProcessExperiment } from './workbuddy-managed-process.js';
+import { formatterPermissionDecision } from './workbuddy-formatter-permission.js';
+import { managedOutputExperiment } from './workbuddy-managed-output.js';
 
 const launchSchema=z.strictObject({executable:z.string().min(1),args:z.array(z.string()).default([]),virtualDisplay:z.boolean().default(false)});
 export class Diagnostic {
@@ -67,21 +73,26 @@ export class Diagnostic {
   }
 }
 export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
-  const interruption=args.includes('--question-interruption'),question=args.includes('--question')||interruption,resume=args.includes('--resume'),
+  const automaticManagedOutput=args.includes('--acp-automatic-managed-approve-one-formatter')||args.includes('--acp-automatic-managed-formatter')||args.includes('--acp-automatic-managed-formatter-steer')||args.includes('--acp-automatic-managed-formatter-question-steer')||args.includes('--acp-automatic-managed-question-steer'),automaticManagedProcess=args.includes('--acp-automatic-managed-process'),automaticManagedRecovery=args.includes('--acp-automatic-managed-recovery'),automaticManagedQuestion=args.includes('--acp-automatic-managed-question'),automaticManagedText=args.includes('--acp-automatic-managed-text'),automaticManaged=args.includes('--acp-automatic-managed')||automaticManagedText||automaticManagedQuestion||automaticManagedRecovery||automaticManagedProcess||automaticManagedOutput,automaticRuntime=args.includes('--acp-automatic-runtime'),automaticPermissionSteer=args.includes('--acp-automatic-permission-steer'),
+    interruption=args.includes('--question-interruption'),question=args.includes('--question')||interruption,resume=args.includes('--resume'),
     permissionDenial=args.includes('--permission-denial'),sameText=args.includes('--steer-same-text'),
     twice=args.includes('--steer-running-twice')||sameText,slash=args.includes('--steer-slash'),near=args.includes('--steer-near-completion'),
     steer=args.includes('--steer-running')||twice||slash||near,
     waitingTwice=args.includes('--steer-waiting-twice'),waiting=args.includes('--steer-waiting')||waitingTwice,
     ownedQuestion=args.includes('--acp-bootstrap-owned-question'),ownedDenial=args.includes('--acp-bootstrap-owned-denial'),
     ownedHooks=args.includes('--acp-bootstrap-owned-hooks'),ownedFormatter=args.includes('--acp-bootstrap-owned-formatter'),
-    bootstrapOwned=args.includes('--acp-bootstrap-owned-run')||ownedQuestion||ownedDenial||ownedHooks||ownedFormatter,
+    ownedFormatterSteer=args.includes('--acp-bootstrap-owned-formatter-steer'),ownedFormatterContract=args.includes('--acp-bootstrap-owned-formatter-contract'),
+    ownedFormatterQuestionSteer=args.includes('--acp-bootstrap-owned-formatter-question-steer'),
+    ownedFormatterHistory=args.includes('--acp-bootstrap-owned-formatter-history'),
+    ownedIsolation=args.includes('--acp-bootstrap-owned-isolation'),
+    bootstrapOwned=args.includes('--acp-bootstrap-owned-run')||ownedQuestion||ownedDenial||ownedHooks||ownedFormatter||ownedFormatterSteer||ownedFormatterContract||ownedFormatterQuestionSteer||ownedFormatterHistory||ownedIsolation,
     owned=args.includes('--acp-owned-run')||bootstrapOwned,
     toolSteer=args.includes('--steer-long-tool'),completedSteer=args.includes('--steer-after-completion'),
     failures=args.includes('--steer-failure-boundaries'),
-    handoff=args.includes('--acp-handoff'),processDiscovery=args.includes('--acp-process-surface')||handoff,
-    acp=args.includes('--acp-surface')||processDiscovery,exercise=args.includes('--exercise')||question||resume||acp||permissionDenial||steer||waiting||owned||toolSteer||completedSteer||failures;
-  const ownedModes=['--acp-owned-run','--acp-bootstrap-owned-run','--acp-bootstrap-owned-question','--acp-bootstrap-owned-denial','--acp-bootstrap-owned-hooks','--acp-bootstrap-owned-formatter'];
-  const flags=args.filter(arg=>!['--exercise','--question','--question-interruption','--resume','--acp-surface','--acp-process-surface','--acp-handoff',...ownedModes,'--permission-denial','--steer-running','--steer-running-twice','--steer-same-text','--steer-slash','--steer-near-completion','--steer-waiting','--steer-waiting-twice','--steer-long-tool','--steer-after-completion','--steer-failure-boundaries'].includes(arg));
+    handoff=args.includes('--acp-handoff'),releaseHandoff=args.includes('--acp-release-handoff'),processDiscovery=args.includes('--acp-process-surface')||handoff||releaseHandoff,
+    acp=args.includes('--acp-surface')||processDiscovery,exercise=args.includes('--exercise')||question||resume||acp||permissionDenial||steer||waiting||owned||toolSteer||completedSteer||failures||automaticRuntime||automaticPermissionSteer||automaticManaged;
+  const ownedModes=['--acp-owned-run','--acp-bootstrap-owned-run','--acp-bootstrap-owned-question','--acp-bootstrap-owned-denial','--acp-bootstrap-owned-hooks','--acp-bootstrap-owned-formatter','--acp-bootstrap-owned-formatter-steer','--acp-bootstrap-owned-formatter-contract','--acp-bootstrap-owned-formatter-question-steer','--acp-bootstrap-owned-formatter-history','--acp-bootstrap-owned-isolation'];
+  const flags=args.filter(arg=>!['--exercise','--acp-automatic-runtime','--acp-automatic-permission-steer','--acp-automatic-managed','--acp-automatic-managed-text','--acp-automatic-managed-question','--acp-automatic-managed-recovery','--acp-automatic-managed-process','--acp-automatic-managed-approve-one-formatter','--acp-automatic-managed-formatter','--acp-automatic-managed-formatter-steer','--acp-automatic-managed-formatter-question-steer','--acp-automatic-managed-question-steer','--question','--question-interruption','--resume','--acp-surface','--acp-process-surface','--acp-handoff','--acp-release-handoff',...ownedModes,'--permission-denial','--steer-running','--steer-running-twice','--steer-same-text','--steer-slash','--steer-near-completion','--steer-waiting','--steer-waiting-twice','--steer-long-tool','--steer-after-completion','--steer-failure-boundaries'].includes(arg));
   if(flags.length!==5||flags[0]!=='--enable-live'||flags[1]!=='--launch-profile'||flags[3]!=='--output'||(acp&&(question||resume))||
     (permissionDenial&&(acp||question||resume))||(steer&&(acp||question||resume||permissionDenial))||(twice&&args.includes('--steer-running'))||
     (slash&&(twice||args.includes('--steer-running')))||
@@ -90,8 +101,10 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
     (owned&&(acp||question||resume||permissionDenial||steer||waiting))||args.filter(arg=>ownedModes.includes(arg)).length>1||
     (sameText&&args.includes('--steer-running-twice'))||(toolSteer&&(acp||question||resume||permissionDenial||steer||waiting||owned))||
     (completedSteer&&(acp||question||resume||permissionDenial||steer||waiting||owned||toolSteer))||
-    (failures&&(acp||question||resume||permissionDenial||steer||waiting||owned||toolSteer||completedSteer))) {
-    process.stderr.write('需要 --enable-live --launch-profile <私有 JSON> --output <Git 外新文件>；可选 --exercise、--question、--question-interruption、--resume、--acp-surface、--acp-process-surface、--acp-handoff、--acp-owned-run、--acp-bootstrap-owned-run、--acp-bootstrap-owned-question、--acp-bootstrap-owned-denial、--acp-bootstrap-owned-hooks、--acp-bootstrap-owned-formatter、--permission-denial、--steer-running、--steer-running-twice、--steer-same-text、--steer-slash、--steer-near-completion、--steer-waiting、--steer-waiting-twice、--steer-long-tool、--steer-after-completion、--steer-failure-boundaries。\n');return 2;
+    (failures&&(acp||question||resume||permissionDenial||steer||waiting||owned||toolSteer||completedSteer))||(handoff&&releaseHandoff)||
+    ((automaticRuntime||automaticPermissionSteer||automaticManaged)&&(question||resume||acp||permissionDenial||steer||waiting||owned||toolSteer||completedSteer||failures))||
+    [automaticRuntime,automaticPermissionSteer,automaticManaged].filter(Boolean).length>1||args.filter(arg=>['--acp-automatic-managed','--acp-automatic-managed-text','--acp-automatic-managed-question','--acp-automatic-managed-recovery','--acp-automatic-managed-process','--acp-automatic-managed-approve-one-formatter','--acp-automatic-managed-formatter','--acp-automatic-managed-formatter-steer','--acp-automatic-managed-formatter-question-steer','--acp-automatic-managed-question-steer'].includes(arg)).length>1) {
+    process.stderr.write('需要 --enable-live --launch-profile <私有 JSON> --output <Git 外新文件>；可选 --exercise、--acp-automatic-runtime、--acp-automatic-permission-steer、--acp-automatic-managed、--acp-automatic-managed-text、--acp-automatic-managed-question、--acp-automatic-managed-recovery、--acp-automatic-managed-process、--acp-automatic-managed-approve-one-formatter、--acp-automatic-managed-formatter、--acp-automatic-managed-formatter-steer、--acp-automatic-managed-formatter-question-steer、--acp-automatic-managed-question-steer、--question、--question-interruption、--resume、--acp-surface、--acp-process-surface、--acp-handoff、--acp-release-handoff、--acp-owned-run、--acp-bootstrap-owned-run、--acp-bootstrap-owned-question、--acp-bootstrap-owned-denial、--acp-bootstrap-owned-hooks、--acp-bootstrap-owned-formatter、--acp-bootstrap-owned-formatter-steer、--acp-bootstrap-owned-formatter-contract、--acp-bootstrap-owned-formatter-question-steer、--acp-bootstrap-owned-formatter-history、--acp-bootstrap-owned-isolation、--permission-denial、--steer-running、--steer-running-twice、--steer-same-text、--steer-slash、--steer-near-completion、--steer-waiting、--steer-waiting-twice、--steer-long-tool、--steer-after-completion、--steer-failure-boundaries。\n');return 2;
   }
   let child:ChildProcess|undefined,directory:string|undefined,diagnostic:Diagnostic|undefined,reserved=false;
   const report:Record<string,unknown>={kind:'real_workbuddy_experiment',capabilityOutcome:'unverified',exerciseRequested:exercise};
@@ -129,7 +142,15 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
     report['accountApiReady']=account?.ready===true;
     report['authenticationObserved']=account?.authenticated===true;
     report['productVersion']=typeof account?.version==='string'&&/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(account.version)?account.version:'unknown';
-    if(exercise&&account?.authenticated===true) {
+    if((automaticRuntime||automaticPermissionSteer||automaticManaged)&&account?.authenticated===true) {
+      phase='automatic_runtime_processes';const workspace=join(directory,'workspace');privateDirectory(workspace);
+      const debugUrl=new URL(endpoint);debugUrl.protocol='http:';debugUrl.pathname='/';
+      if(automaticRuntime)report['runtimeObservation']=await automaticRuntimeExperiment(diagnostic,debugUrl.href,workspace);
+      else if(automaticManagedOutput)report['managedOutputObservation']=await managedOutputExperiment(debugUrl.href,workspace,args.includes('--acp-automatic-managed-approve-one-formatter')?'approved-formatter':args.includes('--acp-automatic-managed-question-steer')?'native-question-steer':args.includes('--acp-automatic-managed-formatter-question-steer')?'question-steer':args.includes('--acp-automatic-managed-formatter-steer')?'steer':'contract',args.includes('--acp-automatic-managed-approve-one-formatter')?formatterPermissionDecision:undefined);
+      else if(automaticManagedProcess)report['managedProcessObservation']=await managedProcessExperiment(diagnostic,debugUrl.href,workspace);
+      else if(automaticManaged)report['managedObservation']=await automaticManagedExperiment(debugUrl.href,workspace,automaticManagedRecovery?'recovery':automaticManagedText?'text':automaticManagedQuestion?'question':'interleaved',diagnostic);
+      else report['permissionSteerObservation']=await automaticPermissionSteerExperiment(debugUrl.href,workspace);
+    }else if(exercise&&account?.authenticated===true) {
       phase='session_create';
       const workspace=join(directory,'workspace');privateDirectory(workspace);
       if(ownedHooks){configureClassicHookObservation(workspace);report['scopedClassicHooksConfigured']=true;}
@@ -149,7 +170,7 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
         if(acp){
           const basic=observation as {completedNormally?:unknown;isProcessing?:unknown}|undefined;
           phase='acp_surface';
-          report['acpObservation']=basic?.completedNormally===true&&basic.isProcessing===false?await acpSurfaceExperiment(diagnostic,log,workspace,processDiscovery,handoff):{status:'skipped_incomplete_original_task'};
+          report['acpObservation']=basic?.completedNormally===true&&basic.isProcessing===false?await acpSurfaceExperiment(diagnostic,log,workspace,processDiscovery,handoff,releaseHandoff):{status:'skipped_incomplete_original_task'};
         }
         if(permissionDenial) {
           const basic=observation as {completedNormally?:unknown;isProcessing?:unknown}|undefined;
@@ -174,7 +195,8 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
           phase='acp_owned_session';
           report['ownedSessionObservation']=basic?.completedNormally===true&&basic.isProcessing===false?
             await ownedSessionExperiment(diagnostic,workspace,{initializeBootstrap:bootstrapOwned,exerciseQuestion:ownedQuestion,
-              exercisePermission:ownedDenial,observeHooks:ownedHooks,exerciseFormatter:ownedFormatter}):{status:'skipped_incomplete_original_task'};
+              exercisePermission:ownedDenial,observeHooks:ownedHooks,exerciseFormatter:ownedFormatter,exerciseFormatterSteer:ownedFormatterSteer,
+              exerciseFormatterContract:ownedFormatterContract,exerciseFormatterQuestionSteer:ownedFormatterQuestionSteer,exerciseFormatterHistory:ownedFormatterHistory,exerciseIsolation:ownedIsolation}):{status:'skipped_incomplete_original_task'};
         }
         if(toolSteer) {
           const basic=observation as {completedNormally?:unknown;isProcessing?:unknown}|undefined;
@@ -210,7 +232,7 @@ export async function workbuddyCapabilityProbe(args:string[]):Promise<number> {
         }
       }
     }
-    report['remaining']=['courier_restart_original_mapping','writer_handoff','steer_consumed_in_running_and_waiting_input',
+    report['remaining']=['courier_application_restart_original_mapping','foreign_writer_conflict_and_running_lifecycle','steer_consumed_in_all_required_states',
       'courier_question_and_execution_permission_roundtrip','typed_progress_final_and_message_boundaries','authoritative_inspection'];
     writeFileSync(output,JSON.stringify(report,null,2),{mode:0o600});
     const published={...report};

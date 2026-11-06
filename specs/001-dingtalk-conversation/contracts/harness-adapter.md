@@ -19,7 +19,7 @@ limitations。探测本身不登录、不创建任务、不夺取写入权。
 | --- | --- |
 | isolatedSessions | 不同 Courier 会话绑定独立的 Harness 会话及执行上下文 |
 | createAndResume | 可创建 Harness 会话；正常 Courier 重启后 load 原 Harness 会话并续接 |
-| writerOwnership | 可区分可写、冲突与未知，冲突不强占；交接方式有实测依据 |
+| writerOwnership | Courier 独占实际 Harness 会话；可区分可写、冲突与未知，冲突不强占；关闭自有连接后能按原引用恢复。不要求接管桌面已有用户会话 |
 | timelySteer | 在声明的运行状态（包括等待人工输入）中影响当前任务后续工作；非排队、非取消后重启 |
 | inputCorrelation | 能将 start/steer/answer 的确认与本地操作、原任务关联，区分未知结果 |
 | explicitCompletion | 有可靠完成/失败证据，独立于流结束和可见文本 |
@@ -118,6 +118,7 @@ fragmentIndex 归一化为从 0 连续递增；finalFragmentIndex=N 时须收齐
 不把底层 exception、路径、凭据、其他 Harness 会话内容或运行端点直接发给用户。
 
 写入权恢复只允许在原 sessionRef 上继续；首版不提供强制抢占或关闭其他客户端的方法。
+桌面仅提供独立的空白启动宿主 H，不能把 H 绑定为用户上下文。Courier 创建并持有 A/B 等实际 Harness 会话；宿主可以按已验证生命周期更换，但原 A/B 及其三层关联不变。其他客户端意外持有 A/B 时，仍返回写入权冲突，不创建替代上下文。 自动模式仅在持久进程身份确认旧后端已结束后创建新空白宿主；端点不可达、身份未知或创建结果不明均不能触发重复创建。预热进程须由准确 PID/宿主注册记录及其实际 socket 共同证明归属。
 普通输入不支持或失效为真实错误，不能发送例行“忙碌，请等待”回执来代替转交。
 
 ## WorkBuddy 实验映射
@@ -128,6 +129,18 @@ fragmentIndex 归一化为从 0 连续递增；finalFragmentIndex=N 时须收齐
 人工答复候选包括标准权限响应及内部 `_codebuddy.ai/resolveInterruption`，不得混淆传输请求 ID
 和持久请求 ID；问答、权限选项和重连后有效性都必须真实验证。
 
+当前 CLI 的标准 session/request_permission 顶层 _meta 中 codebuddy.ai/requestId 是 Harness 权限请求自身的独立相关标识，不是 Run 标识或 JSON-RPC 的 id；interruption 广播也可不带 Run 字段。关联必须来自原 Run 的已核实工具 ID、工具名和完整输入，不能凭当前活动任务或该权限相关标识猜测。独立一次批准探测另要求原生 toolArgumentsComplete=true；增量参数本身不授权。经操作者单次明确授权的 153 帧往返已观察原决定接收、原工具/消息完成和原 Run end_turn，仍不代表完整人工能力，见 verification/formatter-permission-2026-11-06.md（相对功能目录）。
+
 运行发现和激活接口尚无受支持生产契约。实验入口只能通过操作者正常配置/公开流程获得，
 不得提取进程内存或环境中的凭据。诊断实验如果后续使用本机调试端点，必须单独记录实验范围并结束后关闭。
 静态方法存在不授予 supported 状态，也不为不可靠消息分类/片段补造证据。
+
+### WorkBuddy 专用上下文连接组件
+
+内部 contextSessionRef 只允许连接已有 Courier 归属的实际 Harness 会话；不创建用户上下文、不激活宿主或接管其他客户端。首次 load 原 A 后，显式 default 模式需从原生 configOptions 确认，配置未知时保留意图并阻止再次修改；缺失/冲突/未就绪不派发用户输入。组件角色进入证据指纹，不能把子连接当成完整 Harness 实例能力或真实服务组合已完成。
+
+普通独占组合使用 ManagedWorkBuddy 实现完整 HarnessPort：管理连接仅初始化 H、创建 A/B，并在各自专用连接 load 前释放自己的连接；每个实际 Harness 会话保持独立连接，事件、steer 和人工答案只沿原引用转发。创建连接的短时串行控制不覆盖 Agent 运行期间，不阻塞其他上下文的运行或答案。关闭只释放本应用的连接，不取消任务、销毁后端或夺取外来写入权。
+
+组合层持久记录创建归属、操作关联和各原 Run 的接收/终态事实；同一 operationId 重复调用不再次执行，同文不同 inputId 保持独立。创建、加载、运行或配置结果未知时保留原事实，不以新上下文或自动重发继续。重建时只有已确认空闲的原上下文允许重新 load。可选操作查询、事件重放和服务端幂等能力明确 unsupported；组合角色及实现内容另行绑定证据指纹，必需能力继续以真实证据准入。
+
+自动模式按 Courier 会话隔离后端：各自的空白宿主生命周期记录分区，原实际 Harness 引用及归属仍在实例内唯一关联。A 等待人工答案时，B 的激活和运行不得改动 A 的后端状态。已知隔离路由缺失/损坏时停止，不能退回共享宿主；此前共享宿主上的原上下文保留原路径，不静默迁移。固定宿主模式不声明该隔离能力；自动/固定及后端隔离策略参与证据指纹。

@@ -32,7 +32,8 @@ function fixture(mode:'valid'|'permission'|'wrong_marker'|'stale'|'foreign'|'unk
         {status:'accepted',sessionRef:'own-harness',runRef:'own-run',vendorRequestId:'own-question',receiptEvidence:'synthetic-answer'})};
     },
   };
-  return {adapter,get answers(){return answers;},get released(){return released;}};
+  return {adapter,withdraw:()=>listener?.({...base,eventType:'input.invalidated',payload:{vendorRequestId:'own-question',reason:'withdrawn'}}),
+    get answers(){return answers;},get released(){return released;}};
 }
 
 test('owned ACP question observation requires the original accepted answer and actual assembled continuation',async()=>{
@@ -53,4 +54,24 @@ test('unknown answers are not retried and a question-body echo cannot prove Agen
     const f=fixture(mode),report=await acpQuestionExperiment(f.adapter,'own-harness');
     assert.equal(report['status'],'unverified');assert.equal(f.answers,1);assert.equal(f.released,true);
   }
+});
+
+test('a coordinated peer observation runs before the exact question answer and cannot answer after withdrawal or failed observation',async()=>{
+  for(const mode of ['valid','failed','withdrawn'] as const){
+    const f=fixture();let hooks=0;
+    const report=await acpQuestionExperiment(f.adapter,'own-harness',1000,async observation=>{
+      hooks++;assert.equal(f.answers,0);assert.equal(observation.request.payload.vendorRequestId,'own-question');
+      assert.equal(observation.labels.length,2);assert.equal(observation.selected,observation.labels[1]);
+      if(mode==='withdrawn')f.withdraw();return mode!=='failed';
+    });
+    assert.equal(hooks,1);assert.equal(f.answers,mode==='valid'?1:0);assert.equal(report['status'],mode==='valid'?'observed':'unverified');
+    assert.equal(f.released,true);
+  }
+});
+
+test('peer work cannot consume the independent observation window for the original question continuation',async()=>{
+  const f=fixture(),report=await acpQuestionExperiment(f.adapter,'own-harness',20,async()=>{
+    await new Promise(resolve=>setTimeout(resolve,30));return true;
+  });
+  assert.equal(report['status'],'observed');assert.equal(f.answers,1);assert.equal(report['answerAcceptedEvent'],true);
 });

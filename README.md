@@ -4,9 +4,10 @@ Agent Courier 是一个连接钉钉与不同 Harness（Agent 运行系统）的�
 
 **本项目不实现 Agent 本身。** Agent 在 Harness 中执行任务；模型调用、工具执行、本地文件访问和执行环境由接入的 Harness 提供和管理。
 
-当前状态：001 的通用核心及未准入的真实适配器代码已写入，181 项离线测试通过。
+当前状态：001 的通用核心及未准入的真实适配器代码已写入，313 项离线测试通过。
 
 WorkBuddy 独立实验已观察正常登录、文本任务终态、原生问题答复、原 Harness 会话恢复与原始 ACP 连接。
+另已在同一已登录实例中创建两个不同 Harness 会话，分别断连恢复并复述各自未重述的上下文标记，未出现另一会话的标记；范围见[双 Harness 会话隔离观察](specs/001-dingtalk-conversation/verification/isolation-2026-11-06.md)，不等于两个钉钉用户的整条链路验收。
 连续两条补充已在运行中（含同文不同输入 ID）、受控长工具、问题待答及受控报告后期分别观察到原任务内生效；完成后 idle 拒绝及运行中斜杠文本拒绝也有独立样本。
 另已观察不匹配预期 Run 的 stale 拒绝，以及本次控制连接故障注入后保留 unknown、私有 SQLite 重开及对象重建不再次派发。
 
@@ -15,8 +16,10 @@ WorkBuddy 独立实验已观察正常登录、文本任务终态、原生问题�
 另已修复 ACP 握手缺少问题能力声明的缺陷；原始 ACP 原生单选题、一次答案明确接收和原 Run 续行已独立复现，完整权限往返仍未验证。
 随后已独立观察原始 ACP 拒绝回执及原 Run 取消，并修复原工具 cancelled 状态未及时撤销待答请求的遗漏；边界见[拒绝实验](specs/001-dingtalk-conversation/verification/permission-denial-2026-11-06.md)。
 普通 Hook 的原 Run 关联、Stop 完整正文和 FinalStop 也已独立复现；转录元数据另显示 Stop 和 FinalStop 时本轮回答都可能尚未落盘，不能作为转录完成屏障。进度分类与完整输出桥接仍缺证，见 [Hook 调查](specs/001-dingtalk-conversation/verification/hook-output-2026-11-06.md)。
-另已实现并通过正式探测入口局部验证[显式 MCP 格式化输出来源](specs/001-dingtalk-conversation/verification/formatter-output-2026-11-06.md)：同一原 Run 的两个同文 progress 和一个 final 均保留原生工具身份及完成回显，final 与 Run 终态分开。独立 steer 样本的后续输出缺少所需原输入归属，仍被保守隔离；日常配置、steer/重放/恢复及完整准入仍未完成，默认未启用此模式。
-真实适配仍需正常发现/激活与生命周期、桌面持有的原 Harness 会话写入权交接，以及可靠输出分类/片段身份/消息结束契约。继续条件见[实现复核](specs/001-dingtalk-conversation/verification/implementation-review.md)；不能以模拟通过或配置修改替代这些前提。
+另已实现并通过正式探测入口局部验证[显式 MCP 格式化输出来源](specs/001-dingtalk-conversation/verification/formatter-output-2026-11-06.md)：同一原 Run 的两个同文 progress 和一个 final 均保留原生工具身份及完成回显，final 与 Run 终态分开。独立运行中样本已有两条 steer 影响最终正文，但正式八进度样本仍有未通过。另已观察待答期间两条补充、补充触发第二个问题、两次答案明确接收及原 Run end_turn；最终正文尚未满足全部受控标记，仍未宣称完整支持。工具的不同请求字段仅在均属于原 Run 已核实证明链且保留原输入时接受；未知字段不能登记或撤销人工请求。完整运行状态、重放/恢复及准入仍未完成，默认未启用此模式。
+真实适配采用 Courier 独占实际 Harness 会话、桌面仅提供空白启动宿主的方案；首版不接管桌面已有用户会话。独占边界已写入规格；普通连接工厂已支持自动创建空白宿主、发现 ACP、复用持久宿主及恢复原 Harness 上下文。后续已实现并独立验证：确认旧后端退出后自动创建新空白宿主，再恢复原用户 Harness 会话；正常运行元数据另确认 CLI 2.147.0，见[后端恢复观察](specs/001-dingtalk-conversation/verification/runtime-recovery-2026-11-06.md)。新增正式探测已用三个独立适配器进程完成原 H/A 复用及后端结束后 H2/原 A 恢复，见[跨进程观察](specs/001-dingtalk-conversation/verification/runtime-process-2026-11-06.md)。实际 Courier 应用进程重启，以及完整输出/人工/平台门槛仍需完成。自动模式结果见[自动宿主观察](specs/001-dingtalk-conversation/verification/automatic-runtime-2026-11-06.md)。普通独占组合另已接入管理连接与每个 A/B 的专用连接，真实文本样本已确认私有库重开后原 A/B 的上下文；操作和 Run 结果未知时停止，见[连接管理](specs/001-dingtalk-conversation/verification/managed-connections-2026-11-06.md)。按 Courier 分区的恢复另已观察 B 原问题待答期间恢复原 A，以及三个独立适配器进程下的原 A/B 续接和仅 A 宿主替换；详见[独立后端恢复](specs/001-dingtalk-conversation/verification/managed-recovery-2026-11-06.md)。策略、原规格对照及边界见[独占方案](specs/001-dingtalk-conversation/verification/courier-exclusive-2026-11-06.md)与[条款对照](specs/001-dingtalk-conversation/verification/ownership-decision-2026-11-06.md)。
+
+显式格式化模式现已接入私有连接配置，随普通输入提供输出约定，并将模式、规则及相关实现摘要绑定到证据指纹；普通用户请求未提 MCP 工具名的三消息独立样本已通过。该历史样本的 ACP 没有报告 CLI 版本；后续自有运行注册元数据已确认当前样本版本，但不能倒推历史样本版本或形成完整准入。配置可解析及局部输出通过不构成真实服务准入。用法与限制见[验证指南](specs/001-dingtalk-conversation/quickstart.md)。
 
 首个功能的[规格](specs/001-dingtalk-conversation/spec.md)与
 [实施计划](specs/001-dingtalk-conversation/plan.md)限定为文本私聊、持续上下文、运行中及时 steer、
@@ -50,6 +53,8 @@ printf '%s\n' '{"text":"synthetic demo input"}' | node dist/main.js serve --conf
 `serve` 当前只开放 fake 模式，从标准输入接收合成 JSON，并记录三条模拟输出的投递数。
 mock Harness 的上下文在 CLI 进程退出后消失；持久 Courier 关联与外部 Harness 续接通过保留同一测试 Harness 的重启旅程验证，
 不能把这项模拟结果当作真实跨进程上下文恢复。
+另已用独立 Courier 子进程和进程外测试 Harness 验证正常重启，以及五类副作用的 15 个强制终止窗口；
+核实回执的关联校验、并发新事实与终态人工请求收尾也已补齐。范围见[恢复验证](specs/001-dingtalk-conversation/verification/recovery-2026-11-06.md)，真实 WorkBuddy/钉钉重启仍未验收。
 `status --session <COURIER_SESSION_ID> --json` 只读展示本地状态与可核实的本地操作/投递 ID；
 `reconcile` 必须停服取得同锁，mock 跨进程缺少查询权威时返回 5 并保留 unknown。
 
@@ -249,3 +254,9 @@ Harness 会话写入权协调必须覆盖桌面客户端和 Agent Courier。仅�
 ## 许可证与仓库
 
 本项目采用 [MIT 许可证](LICENSE)，公开仓库为 [euyuil/agent-courier](https://github.com/euyuil/agent-courier)。当前通用核心仅通过离线验证，尚无应用发布或部署。
+
+执行权限等待的显式探测入口已实现；早期样本停在实际用户 Harness 会话的模式回读。后续专用 ACP 连接已在首次 load 原 A 后确认 default，并观察精确原权限、两条补充接收及一次拒绝/原 Run 取消；拒绝前的两个实际效果仍缺证。普通真实组合现已按 A/B 管理专用连接及独立后端，见[专用连接观察](specs/001-dingtalk-conversation/verification/context-connection-2026-11-06.md)与[连接管理](specs/001-dingtalk-conversation/verification/managed-connections-2026-11-06.md)。
+
+最新修复使完整人工请求可越过尚未完成的普通进度，隐藏的未完成输出不再挡住最终回复；没有自动答复或补造终态。自动组合的能力目标另已绑定配置桌面实例，三个独立适配器进程及空白宿主替换的稳定性已有真实观察。较早的 default 模式格式化样本停在权限请求；不依赖格式化工具的两次问答样本仍缺第二条补充效果。结果与未完成边界见[独占组合输出观察](specs/001-dingtalk-conversation/verification/managed-output-2026-11-06.md)，真实服务继续关闭。
+
+[一次合成格式化权限往返](specs/001-dingtalk-conversation/verification/formatter-permission-2026-11-06.md)现已在操作者明确授权后通过：153 帧中仅一次 allow-once，原始接收、原工具及完整消息和原 Run end_turn 均匹配。已修复探测器对权限相关标识、无 Run 广播及增量参数的解释；默认零批准，持续/重复决定仍在传输前拦截。该单次授权已使用，不作为后续请求的批准，完整人工/平台门槛仍保留。

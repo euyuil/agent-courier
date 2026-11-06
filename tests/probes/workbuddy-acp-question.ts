@@ -5,16 +5,20 @@ import type { HarnessEvent } from '../../src/adapters/harness/events.js';
 const receiptSummary=(receipt:Receipt)=>receipt.status==='accepted'?{status:receipt.status}:{status:receipt.status,code:receipt.errorCode};
 const terminal=(event:HarnessEvent)=>['run.completed','run.failed','connection.lost'].includes(event.eventType);
 
-export async function acpQuestionExperiment(adapter:Pick<HarnessPort,'start'|'answer'|'subscribe'>,sessionRef:string,timeoutMs=90000):Promise<Record<string,unknown>> {
+export interface PendingQuestionObservation {
+  request:Extract<HarnessEvent,{eventType:'input.requested'}>;questionText:string;labels:string[];selected:string;isPending():boolean;
+}
+export async function acpQuestionExperiment(adapter:Pick<HarnessPort,'start'|'answer'|'subscribe'>,sessionRef:string,timeoutMs=90000,
+  afterQuestion?:(observation:PendingQuestionObservation)=>Promise<boolean>):Promise<Record<string,unknown>> {
   const suffix=randomUUID(),labels=[`CourierA-${suffix}`,`CourierB-${suffix}`],questionText=`CourierQuestion-${suffix}`;
   const events:HarnessEvent[]=[];let overflow=false,wake:(()=>void)|undefined;
   const deadline=Date.now()+timeoutMs;
   const unsubscribe=adapter.subscribe(sessionRef,event=>{if(events.length<2048)events.push(event);else overflow=true;wake?.();});
-  const waitFor=async(predicate:(event:HarnessEvent)=>boolean)=>{
-    while(!overflow&&Date.now()<deadline) {
+  const waitFor=async(predicate:(event:HarnessEvent)=>boolean,until=deadline)=>{
+    while(!overflow&&Date.now()<until) {
       const event=events.find(predicate);if(event)return event;
       let timer:NodeJS.Timeout|undefined;
-      try {await new Promise<void>(resolve=>{wake=resolve;timer=setTimeout(resolve,Math.max(1,deadline-Date.now()));});}
+      try {await new Promise<void>(resolve=>{wake=resolve;timer=setTimeout(resolve,Math.max(1,until-Date.now()));});}
       finally{if(timer)clearTimeout(timer);wake=undefined;}
     }
     return undefined;
@@ -37,15 +41,20 @@ export async function acpQuestionExperiment(adapter:Pick<HarnessPort,'start'|'an
       labels.every(label=>field.options!.some(option=>option.code===label));
     report['questionObserved']=valid===true;
     if(!valid||!first||first.eventType!=='input.requested')return report;
-    if(overflow||events.some(event=>own(event)&&(terminal(event)||event.eventType==='input.invalidated'&&
-      event.payload.vendorRequestId===first.payload.vendorRequestId||event.eventType==='input.requested'&&event.payload.kind==='permission')))return report;
+    const unsafe=()=>overflow||events.some(event=>own(event)&&(terminal(event)||event.eventType==='input.invalidated'&&
+      event.payload.vendorRequestId===first.payload.vendorRequestId||event.eventType==='input.requested'&&event.payload.kind==='permission'));
+    if(unsafe())return report;
+    if(afterQuestion){const before=Date.now();report['pendingQuestionHook']=await afterQuestion({request:first,questionText,labels,selected:labels[1]!,isPending:()=>!unsafe()});
+      report['peerObservationMs']=Date.now()-before;
+      if(report['pendingQuestionHook']!==true||unsafe())return report;}
     const cursor=events.length,operationId=randomUUID(),inputId=randomUUID();report['answerCalls']=1;
     const answered=await adapter.answer({sessionRef,runRef:started.runRef,vendorRequestId:first.payload.vendorRequestId,operationId,inputId,
       answer:{kind:'form',values:{q_0:labels[1]!}}}).receipt;
     report['answer']=receiptSummary(answered);
     if(answered.status!=='accepted'||answered.sessionRef!==sessionRef||answered.runRef!==started.runRef||
       answered.vendorRequestId!==first.payload.vendorRequestId)return report;
-    const end=await waitFor(event=>own(event)&&terminal(event));
+    const beforeCompletion=Date.now(),end=await waitFor(event=>own(event)&&terminal(event),Date.now()+timeoutMs);
+    report['continuationWaitMs']=Date.now()-beforeCompletion;
     report['completion']=end?.eventType??'not_observed';
     report['stopReason']=end?.eventType==='run.completed'?end.payload.stopReason:'not_observed';
     report['answerAcceptedEvent']=events.some(event=>own(event)&&event.eventType==='input.accepted'&&

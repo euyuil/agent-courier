@@ -8,6 +8,7 @@ import { desktopAuthenticated } from '../../src/adapters/workbuddy-experimental/
 import { rejectedReceipt } from '../../src/adapters/workbuddy-experimental/errors.js';
 import { RpcFailure } from '../../src/adapters/workbuddy-experimental/connection.js';
 import { interaction } from '../../src/adapters/workbuddy-experimental/interaction.js';
+import { requiredCapabilities } from '../../src/domain/capabilities.js';
 
 function fixture(resolution:unknown={resolved:true,queued:false},steerResponse:'accepted'|'timeout'='accepted',formatterLaunch?:{executable:string;entrypoint:string},typedFormatterOutput=false) {
   let stream:ReadableStreamDefaultController<Uint8Array>;
@@ -34,8 +35,40 @@ function fixture(resolution:unknown={resolved:true,queued:false},steerResponse:'
   return {connection,adapter,calls,data,send(message:unknown){stream.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(message)}\r\n\r\n`));}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('runtime CLI identity must remain confirmed and agree with an ACP version before versioned capabilities are admitted',async()=>{
+  for(const runtimeVersion of ['synthetic','different',undefined]){
+    const f=fixture(),data=new Map<string,unknown>();
+    const evidence={id:'synthetic-proof',kind:'harness' as const,adapterVersion:'1',productVersion:'synthetic-desktop',contextFingerprint:'synthetic',
+      checkedAt:1,outcome:'passed' as const,evidenceRef:'synthetic-only',scope:Object.fromEntries(requiredCapabilities.map(capability=>[capability,{states:[],limitations:[]}]))};
+    const adapter=new WorkBuddyAdapter({connection:f.connection,store:{get:key=>data.get(key),set:(key,value)=>{data.set(key,value);}},cwd:'.',
+      instanceId:'synthetic-instance',contextFingerprint:'synthetic',evidence:[evidence],expectedCliVersion:'synthetic',
+      runtimeVersion:async()=>runtimeVersion,identity:async()=>({authenticated:true,productVersion:'synthetic-desktop'})});
+    await adapter.connect();
+    try{
+      const report=await adapter.probe('synthetic-instance');
+      assert.equal(report.cliVersion,runtimeVersion==='synthetic'?'synthetic':undefined);
+      assert.equal(report.capabilities.isolatedSessions,runtimeVersion==='synthetic'?'supported':'unverified');
+      assert.equal(report.capabilities.typedVisibleOutput,'unverified');
+    }finally{await adapter.disconnect('synthetic-instance');}
+  }
+});
 test('typed formatter mode requires an explicitly configured producer',()=>{
   assert.throws(()=>fixture(undefined,'accepted',undefined,true),{message:'configuration_invalid'});
+});
+test('changed output artifacts revoke required capability admission without rewriting prior evidence',async()=>{
+  const f=fixture(),data=new Map<string,unknown>();let current=true;
+  const evidence={id:'synthetic-proof',kind:'harness' as const,adapterVersion:'1',productVersion:'synthetic-desktop',contextFingerprint:'synthetic',
+    checkedAt:1,outcome:'passed' as const,evidenceRef:'synthetic-only',scope:Object.fromEntries(requiredCapabilities.map(capability=>[capability,{states:[],limitations:[]}]))};
+  const adapter=new WorkBuddyAdapter({connection:f.connection,store:{get:key=>data.get(key),set:(key,value)=>{data.set(key,value);}},cwd:'.',
+    instanceId:'synthetic-instance',contextFingerprint:'synthetic',evidence:[evidence],identity:async()=>({authenticated:true,productVersion:'synthetic-desktop'}),
+    verifyOutputProfile:()=>current});
+  await adapter.connect();
+  try {
+    assert.equal((await adapter.probe('synthetic-instance')).capabilities.isolatedSessions,'supported');
+    current=false;const changed=await adapter.probe('synthetic-instance');
+    assert.ok(requiredCapabilities.every(capability=>changed.capabilities[capability]==='unverified'));
+    assert.ok(changed.limitations.includes('output_profile_changed'));assert.equal(evidence.outcome,'passed');
+  }finally{await adapter.disconnect('synthetic-instance');}
 });
 test('typed formatter follows a verified steer owner only with the original prompt provenance',async()=>{
   const f=fixture(undefined,'accepted',{executable:'/synthetic/bin/node',entrypoint:'/synthetic/formatter-server.js'},true);
@@ -43,6 +76,14 @@ test('typed formatter follows a verified steer owner only with the original prom
   try {
     const handle=f.adapter.start({operationId:'typed-steer-start',inputId:'input',sessionRef:session,text:'synthetic',clientRunId:'courier-run'});
     await tick();const command=f.calls.find(call=>call.method==='session/prompt')!,run=(command.params['_meta'] as Record<string,string>)['codebuddy.ai/conversationRequestId']!;
+    const tracking=command.params['_meta'] as Record<string,string>;
+    assert.equal(tracking['codebuddy.ai/requestId'],run);
+    assert.equal(tracking['codebuddy.ai/messageRequestId'],run);
+    assert.ok(!['typed-steer-start','input','courier-run'].includes(run));
+    const prompt=command.params['prompt'] as {type:string;text:string}[];
+    assert.equal(prompt.length,2);assert.equal(prompt[0]!.type,'text');
+    assert.match(prompt[0]!.text,/courier-formatter\/1/);assert.match(prompt[0]!.text,/mcp__courier_formatter__courier_format_message/);
+    assert.deepEqual(prompt[1],{type:'text',text:'synthetic'});
     const send=(update:unknown,sessionId=session)=>f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId,update}});
     send({sessionUpdate:'user_message_chunk',_meta:{'codebuddy.ai/requestId':run}});await handle.receipt;
     const source=(id:string,owner:string,origin:string)=>({sessionUpdate:'tool_call',toolCallId:id,status:'in_progress',rawInput:{kind:'final',text:'linked body'},
@@ -56,7 +97,7 @@ test('typed formatter follows a verified steer owner only with the original prom
     const input={operationId:'typed-steer',inputId:'typed-extra',sessionRef:session,expectedRunRef:run,text:'synthetic change'};
     assert.equal((await f.adapter.steer(input).receipt).status,'accepted');
     const steer=f.calls.find(call=>call.id===input.operationId)!;
-    send({sessionUpdate:'user_message_chunk',messageId:input.inputId,_meta:{'codebuddy.ai/conversationRequestId':run,'codebuddy.ai/requestId':'native-next',
+    send({sessionUpdate:'user_message_chunk',messageId:input.inputId,content:{type:'text',text:input.text},_meta:{'codebuddy.ai/conversationRequestId':run,'codebuddy.ai/requestId':'native-next',
       'codebuddy.ai/messageRequestId':input.inputId,'codebuddy.ai/messageId':input.inputId,'codebuddy.ai/steerClientMeta':steer.params['_meta']}});await tick();
     assert.equal(events.filter(e=>e.eventType==='input.applied').length,1);
     send(source('foreign-origin','native-next','foreign'));send(done('foreign-origin','native-next','foreign'));send(done('foreign-origin'));
@@ -65,7 +106,8 @@ test('typed formatter follows a verified steer owner only with the original prom
     send({...source('history','native-next',run),_meta:{...source('history','native-next',run)._meta,'codebuddy.ai/historyReplay':true}});
     send(source('foreign-session','native-next',run),'foreign-session');await tick();
     assert.equal(events.some(e=>e.eventType==='message.started'),false);
-    send(source('linked','native-next',run));send(done('linked','native-next'));send(done('linked'));await tick();
+    send({...source('linked','native-next',run),_meta:{...source('linked','native-next',run)._meta,'codebuddy.ai/conversationRequestId':run}});
+    send(done('linked','native-next'));send(done('linked'));await tick();
     const bodies=events.filter(e=>e.eventType==='message.fragment');assert.equal(bodies.length,1);
     assert.equal(bodies[0]!.eventType==='message.fragment'&&bodies[0]!.payload.text,'linked body');
     assert.equal(events.some(e=>e.eventType==='run.completed'),false);
@@ -86,6 +128,60 @@ test('conflicting original formatter metadata cannot establish tool ownership fo
     send({sessionUpdate:'user_message_chunk',_meta:{'codebuddy.ai/requestId':run}});await handle.receipt;
     send({sessionUpdate:'tool_call_update',toolCallId:'ambiguous',status:'completed',rawOutput:{text:JSON.stringify({schemaVersion:1,kind:'final',text:'untrusted'})}});
     await tick();assert.equal(events.some(e=>e.eventType==='message.fragment'),false);
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+});
+test('native human requests after verified steer retain the original Run and explicit answer or withdrawal scope',async()=>{
+  const f=fixture(undefined,'accepted',{executable:'/synthetic/bin/node',entrypoint:'/synthetic/formatter-server.js'},true);
+  await f.adapter.connect();const session='synthetic-harness-session',events:HarnessEvent[]=[];f.adapter.subscribe(session,event=>events.push(event));
+  try {
+    const started=f.adapter.start({operationId:'question-after-steer-start',inputId:'original-input',sessionRef:session,text:'synthetic',clientRunId:'courier-run'});
+    await tick();const run=(f.calls.find(call=>call.id===started.operationId)!.params['_meta'] as Record<string,string>)['codebuddy.ai/conversationRequestId']!;
+    const send=(update:unknown)=>f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update}});
+    send({sessionUpdate:'user_message_chunk',_meta:{'codebuddy.ai/requestId':run}});await started.receipt;
+    const control={operationId:'question-control',inputId:'question-control-input',sessionRef:session,expectedRunRef:run,text:'continue'};
+    await f.adapter.steer(control).receipt;const command=f.calls.find(call=>call.id===control.operationId)!;
+    send({sessionUpdate:'user_message_chunk',messageId:control.inputId,content:{type:'text',text:control.text},_meta:{'codebuddy.ai/conversationRequestId':run,
+      'codebuddy.ai/requestId':'question-owner','codebuddy.ai/messageRequestId':control.inputId,'codebuddy.ai/messageId':control.inputId,
+      'codebuddy.ai/steerClientMeta':command.params['_meta']}});await tick();
+    const meta={'codebuddy.ai/requestId':'question-owner','codebuddy.ai/conversationRequestId':'question-owner','codebuddy.ai/messageRequestId':run};
+    const questions=[{question:'Controlled question?',options:[{label:'A'},{label:'B'}]}];
+    const ambiguous={...meta,'codebuddy.ai/conversationRequestId':run,'codebuddy.ai/requestId':'foreign-owner'};
+    send({sessionUpdate:'tool_call',toolCallId:'original-conflict',rawInput:{questions},_meta:{...ambiguous,'codebuddy.ai/toolName':'AskUserQuestion'}});
+    send({sessionUpdate:'session_info_update',_meta:{...ambiguous,'codebuddy.ai/interruptionRequest':{interruptionId:'foreign-q',toolCallId:'original-conflict',
+      toolName:'AskUserQuestion',toolInput:{questions},options:['allow','deny']}}});
+    for(const [id,extra] of [['foreign-origin',{'codebuddy.ai/messageRequestId':'foreign'}],['foreign-owner',{'codebuddy.ai/requestId':'unknown-owner'}],
+      ['member',{'codebuddy.ai/isTeamMember':true}],['history',{'codebuddy.ai/historyReplay':true}]] as const)
+      send({sessionUpdate:'tool_call',toolCallId:id,rawInput:{questions},_meta:{...meta,'codebuddy.ai/toolName':'AskUserQuestion',...extra}});
+    await tick();assert.equal(events.some(event=>event.eventType==='input.requested'),false);
+    send({sessionUpdate:'session_info_update',_meta:{'codebuddy.ai/interruptionRequest':{interruptionId:'native-q',toolCallId:'original-q',
+      toolName:'AskUserQuestion',toolInput:{questions},options:['allow','deny']}}});
+    await tick();assert.equal(events.some(event=>event.eventType==='input.requested'),false);
+    send({sessionUpdate:'tool_call',toolCallId:'original-q',rawInput:{questions},_meta:{...meta,'codebuddy.ai/conversationRequestId':run,'codebuddy.ai/toolName':'AskUserQuestion'}});await tick();
+    const requests=events.filter(event=>event.eventType==='input.requested');assert.equal(requests.length,1);
+    const request=requests[0]!;assert.equal(request.runRef,run);assert.equal(request.payload.kind,'question');
+    assert.equal(f.calls.filter(call=>call.method==='_codebuddy.ai/resolveInterruption').length,0);
+    const answer={operationId:'explicit-question-answer',inputId:'answer-input',sessionRef:session,runRef:run,vendorRequestId:request.payload.vendorRequestId,
+      answer:{kind:'form' as const,values:{q_0:'B'}}};
+    assert.equal((await f.adapter.answer({...answer,runRef:'foreign-run',operationId:'wrong-answer'}).receipt).status,'rejected');
+    assert.equal((await f.adapter.answer(answer).receipt).status,'accepted');
+    const sent=f.calls.filter(call=>call.method==='_codebuddy.ai/resolveInterruption');assert.equal(sent.length,1);
+    assert.deepEqual(sent[0]!.params,{sessionId:session,toolCallId:'original-q',decision:'allow',answers:{q_0:'B'}});
+    send({sessionUpdate:'tool_call',toolCallId:'aliased-permission',rawInput:{command:'synthetic no-op'},_meta:{...meta,'codebuddy.ai/toolName':'Bash'}});
+    send({sessionUpdate:'session_info_update',_meta:{...meta,'codebuddy.ai/interruptionRequest':{interruptionId:'native-p',toolCallId:'aliased-permission',
+      toolName:'Bash',toolInput:{command:'synthetic no-op'},options:['allow','deny']}}});await tick();
+    const permission=events.find(event=>event.eventType==='input.requested'&&event.payload.kind==='permission');assert.ok(permission?.eventType==='input.requested');
+    assert.equal(f.calls.filter(call=>call.method==='_codebuddy.ai/resolveInterruption').length,1);
+    send({sessionUpdate:'session_info_update',_meta:{...ambiguous,'codebuddy.ai/permissionResolved':true,'codebuddy.ai/toolCallId':'aliased-permission','codebuddy.ai/decision':'deny'}});
+    await tick();assert.equal(events.filter(event=>event.eventType==='input.invalidated'&&event.payload.vendorRequestId===permission.payload.vendorRequestId).length,0);
+    send({sessionUpdate:'session_info_update',_meta:{...meta,'codebuddy.ai/permissionResolved':true,'codebuddy.ai/toolCallId':'aliased-permission','codebuddy.ai/decision':'deny'}});
+    send({sessionUpdate:'tool_call_update',toolCallId:'aliased-permission',status:'cancelled',_meta:meta});await tick();
+    assert.equal(events.filter(event=>event.eventType==='input.invalidated'&&event.payload.vendorRequestId===permission.payload.vendorRequestId).length,1);
+    assert.equal((await f.adapter.answer({...answer,operationId:'withdrawn-answer',vendorRequestId:permission.payload.vendorRequestId,
+      answer:{kind:'permission',decision:'deny',optionCode:'deny'}}).receipt).status,'unknown');
+    assert.equal(f.calls.filter(call=>call.method==='_codebuddy.ai/resolveInterruption').length,1);
+    assert.equal(events.some(event=>event.eventType==='run.completed'),false);
+    f.send({jsonrpc:'2.0',id:started.operationId,result:{stopReason:'end_turn'}});await tick();
+    assert.equal(events.filter(event=>event.eventType==='run.completed').length,1);
   }finally{await f.adapter.disconnect('synthetic-instance');}
 });
 test('typed formatter output retains original scope and its final message never substitutes for prompt completion',async()=>{
@@ -147,6 +243,65 @@ async function running(toolCallId:string,resolution?:unknown) {
   assert.equal((await started.receipt).status,'accepted');
   return {...f,events,session,run};
 }
+test('vendor mode=history never confirms a new Run or delivers old formatter snapshots as live output',async()=>{
+  const f=fixture(undefined,'accepted',{executable:'/synthetic/bin/node',entrypoint:'/synthetic/formatter-server.js'},true);
+  const session='synthetic-harness-session',events:HarnessEvent[]=[];await f.adapter.connect();f.adapter.subscribe(session,event=>events.push(event));
+  try {
+    const started=f.adapter.start({operationId:'history-start',inputId:'history-input',sessionRef:session,text:'synthetic',clientRunId:'history-courier'});
+    await tick();const run=(f.calls.find(call=>call.id==='history-start')!.params['_meta'] as Record<string,string>)['codebuddy.ai/conversationRequestId']!;
+    const meta={'codebuddy.ai/requestId':run,'codebuddy.ai/conversationRequestId':run,'codebuddy.ai/messageRequestId':run};
+    for(const placement of ['params','update','content']) {
+      const history={'codebuddy.ai':{mode:'history',offset:1}},id=`history-${placement}`;
+      const update={sessionUpdate:'tool_call',toolCallId:id,rawInput:{kind:'final',text:'PRIVATE_OLD_BODY'},
+        _meta:{...meta,'codebuddy.ai/toolName':'mcp__courier_formatter__courier_format_message',...(placement==='update'?history:{})},
+        ...(placement==='content'?{content:{type:'text',text:'',_meta:history}}:{})};
+      f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update,...(placement==='params'?{_meta:history}:{})}});
+      f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,_meta:history,update:{sessionUpdate:'tool_call_update',toolCallId:id,status:'completed',
+        rawOutput:{text:JSON.stringify({schemaVersion:1,kind:'final',text:'PRIVATE_OLD_BODY'})},_meta:meta}}});
+    }
+    await tick();assert.equal(events.some(event=>event.eventType==='run.started'||event.eventType==='message.started'),false);
+    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update:{sessionUpdate:'user_message_chunk',_meta:{...meta,'codebuddy.ai':{mode:'ask'}}}}});
+    assert.equal((await started.receipt).status,'accepted');
+    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update:{sessionUpdate:'tool_call',toolCallId:'live-final',rawInput:{kind:'final',text:'LIVE_BODY'},
+      _meta:{...meta,'codebuddy.ai/toolName':'mcp__courier_formatter__courier_format_message'}}}});
+    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update:{sessionUpdate:'tool_call_update',toolCallId:'live-final',status:'completed',
+      rawOutput:{text:JSON.stringify({schemaVersion:1,kind:'final',text:'LIVE_BODY'})},_meta:meta}}});
+    f.send({jsonrpc:'2.0',id:'history-start',result:{stopReason:'end_turn'}});await tick();
+    assert.deepEqual(events.filter(event=>event.eventType==='message.fragment').map(event=>event.payload.text),['LIVE_BODY']);
+    assert.equal(events.filter(event=>event.eventType==='run.completed').length,1);
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+});
+
+test('history-mode controls cannot create or withdraw human requests or advance steer ownership',async()=>{
+  const f=await running('live-permission-tool');
+  try {
+    const history={'codebuddy.ai':{mode:'history',offset:4}},base={'codebuddy.ai/requestId':f.run};
+    const send=(update:unknown,meta?:unknown)=>f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update,...(meta?{_meta:meta}:{})}});
+    send({sessionUpdate:'session_info_update',_meta:{...base,'codebuddy.ai/interruptionRequest':{interruptionId:'live-request',toolCallId:'live-permission-tool',
+      toolName:'Bash',toolInput:{command:'synthetic'},options:['allow','deny']}}});await tick();
+    const request=f.events.find(event=>event.eventType==='input.requested');assert.ok(request?.eventType==='input.requested');
+    send({sessionUpdate:'session_info_update',_meta:{...base,'codebuddy.ai/permissionResolved':true,'codebuddy.ai/toolCallId':'live-permission-tool'}},history);
+    send({sessionUpdate:'tool_call',toolCallId:'history-question',rawInput:{questions:[{question:'Private old question',options:[{label:'A'},{label:'B'}]}]},
+      _meta:{...base,...history,'codebuddy.ai/toolName':'AskUserQuestion'}});
+    f.send({jsonrpc:'2.0',id:'history-question-rpc',method:'session/request_permission',params:{sessionId:f.session,_meta:history,
+      toolCall:{toolCallId:'history-question',rawInput:{questions:[{question:'Private old question',options:[{label:'A'},{label:'B'}]}]},_meta:{'codebuddy.ai/toolName':'AskUserQuestion'}},
+      options:[{optionId:'allow',kind:'allow_once',name:'Allow'}]}});
+    const input={operationId:'live-history-steer',inputId:'live-history-extra',sessionRef:f.session,expectedRunRef:f.run,text:'live change'};
+    await f.adapter.steer(input).receipt;const command=f.calls.find(call=>call.id===input.operationId)!;
+    const echo={sessionUpdate:'user_message_chunk',messageId:input.inputId,content:{type:'text',text:input.text},_meta:{
+      'codebuddy.ai/conversationRequestId':f.run,'codebuddy.ai/requestId':'history-next','codebuddy.ai/messageRequestId':input.inputId,
+      'codebuddy.ai/messageId':input.inputId,'codebuddy.ai/steerClientMeta':command.params['_meta']}};
+    send(echo,history);await tick();
+    assert.equal(f.events.filter(event=>event.eventType==='input.requested').length,1);
+    assert.equal(f.events.some(event=>event.eventType==='input.invalidated'||event.eventType==='input.applied'),false);
+    await f.adapter.steer({...input,operationId:'after-history',inputId:'after-history-input'}).receipt;
+    assert.equal(f.calls.find(call=>call.id==='after-history')!.params['expectedRequestId'],f.run);
+    assert.equal((await f.adapter.answer({operationId:'live-denial',inputId:'live-denial-input',sessionRef:f.session,runRef:f.run,
+      vendorRequestId:request.payload.vendorRequestId,answer:{kind:'permission',optionCode:'deny',decision:'deny'}}).receipt).status,'accepted');
+    send(echo);await tick();assert.equal(f.events.filter(event=>event.eventType==='input.applied').length,1);
+    assert.equal(f.calls.filter(call=>call.method==='_codebuddy.ai/resolveInterruption').length,1);
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+});
 test('ACP adapter preserves original Harness session, early Run receipt, steer correlation and explicit completion',async()=>{
   const f=fixture();await f.adapter.connect();const events:HarnessEvent[]=[];
   try {
@@ -496,6 +651,31 @@ test('steer acceptance is separate from consumption, and only the original injec
   }finally{await f.adapter.disconnect('synthetic-instance');}
 });
 
+test('steer injection proof requires the exact complete input text before adopting its native owner',async()=>{
+  const f=await running('owned-tool');
+  try {
+    const input={operationId:'body-steer',inputId:'body-input',sessionRef:f.session,expectedRunRef:f.run,text:'保留空格  和换行\nsynthetic change'};
+    assert.equal((await f.adapter.steer(input).receipt).status,'accepted');
+    const command=f.calls.find(call=>call.id===input.operationId)!;
+    const echo=(content:unknown)=>({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{
+      sessionUpdate:'user_message_chunk',messageId:input.inputId,content,_meta:{
+        'codebuddy.ai/conversationRequestId':f.run,'codebuddy.ai/requestId':'body-next-owner',
+        'codebuddy.ai/messageRequestId':input.inputId,'codebuddy.ai/messageId':input.inputId,'codebuddy.ai/steerClientMeta':command.params['_meta']}}}});
+    for(const content of [undefined,{type:'text',text:'保留空格'}, {type:'text',text:input.text.replace('  ',' ')}, {type:'image',text:input.text}])f.send(echo(content));
+    await tick();
+    assert.equal(f.events.some(event=>event.eventType==='input.applied'),false);
+    assert.equal((f.data.get(`steer:${input.operationId}`) as {status:string}).status,'accepted');
+    const second={...input,operationId:'before-body-proof',inputId:'before-body-input'};
+    await f.adapter.steer(second).receipt;
+    assert.equal(f.calls.find(call=>call.id===second.operationId)!.params['expectedRequestId'],f.run);
+    f.send(echo({type:'text',text:input.text}));f.send(echo({type:'text',text:input.text}));await tick();
+    assert.equal(f.events.filter(event=>event.eventType==='input.applied').length,1);
+    await f.adapter.steer({...second,operationId:'after-body-proof',inputId:'after-body-input'}).receipt;
+    assert.equal(f.calls.find(call=>call.id==='after-body-proof')!.params['expectedRequestId'],'body-next-owner');
+    assert.equal(f.calls.filter(call=>call.method==='session/prompt').length,1);
+  }finally{await f.adapter.disconnect('synthetic-instance');}
+});
+
 test('a persisted steer intent never redispatches after its in-memory receipt was lost',async()=>{
   const f=await running('owned-tool');
   try {
@@ -520,7 +700,7 @@ test('an injected steer echo arriving after completion stays with the completed 
     await tick();const prompt=f.calls.find(call=>call.method==='session/prompt'&&call.id==='new-start')!;
     const nextRun=(prompt.params['_meta'] as Record<string,string>)['codebuddy.ai/conversationRequestId']!;
     f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',_meta:{'codebuddy.ai/requestId':nextRun}}}});await next.receipt;
-    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',messageId:input.inputId,
+    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',messageId:input.inputId,content:{type:'text',text:input.text},
       _meta:{'codebuddy.ai/conversationRequestId':f.run,'codebuddy.ai/requestId':'late-native-owner',
         'codebuddy.ai/messageRequestId':input.inputId,'codebuddy.ai/messageId':input.inputId,'codebuddy.ai/steerClientMeta':command.params['_meta']}}}});await tick();
     f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'agent_message_chunk',
@@ -561,7 +741,7 @@ test('a late injected steer echo can resolve an unknown receipt without replayin
     const input={operationId:'timed-out-steer',inputId:'late-extra',sessionRef:session,expectedRunRef:run,text:'synthetic change'};
     const handle=f.adapter.steer(input);assert.equal((await handle.receipt).status,'unknown');
     const command=f.calls.find(call=>call.method==='session/steer')!;
-    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update:{sessionUpdate:'user_message_chunk',messageId:input.inputId,
+    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:session,update:{sessionUpdate:'user_message_chunk',messageId:input.inputId,content:{type:'text',text:input.text},
       _meta:{'codebuddy.ai/requestId':run,'codebuddy.ai/messageId':input.inputId,'codebuddy.ai/steerClientMeta':command.params['_meta']}}}});await tick();
     assert.equal(events.filter(event=>event.eventType==='input.applied').length,1);
     await f.adapter.steer(input).receipt;
@@ -581,7 +761,7 @@ test('a verified steer transition keeps visible output in the original Run and t
         'codebuddy.ai/conversationRequestId':owner,'codebuddy.ai/requestId':owner,'codebuddy.ai/messageRequestId':origin,'codebuddy.ai/messageId':id}}}});
     f.send(visible('native-next',f.run,'before-proof','UNPROVEN_OUTPUT'));
     const echo={jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',
-      messageId:first.inputId,_meta:{'codebuddy.ai/conversationRequestId':f.run,'codebuddy.ai/requestId':'native-next',
+      messageId:first.inputId,content:{type:'text',text:first.text},_meta:{'codebuddy.ai/conversationRequestId':f.run,'codebuddy.ai/requestId':'native-next',
         'codebuddy.ai/messageRequestId':first.inputId,'codebuddy.ai/messageId':first.inputId,'codebuddy.ai/steerClientMeta':command.params['_meta']}}}};
     for(const invalid of [
       {'codebuddy.ai/messageRequestId':'foreign-input'},
@@ -600,7 +780,7 @@ test('a verified steer transition keeps visible output in the original Run and t
     const next=f.calls.find(call=>call.id===second.operationId)!;
     assert.equal(next.params['expectedRequestId'],'native-next');
     assert.equal((next.params['_meta'] as {'agent-courier':{runRef:string}})['agent-courier'].runRef,f.run);
-    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',messageId:second.inputId,
+    f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',messageId:second.inputId,content:{type:'text',text:second.text},
       _meta:{'codebuddy.ai/conversationRequestId':'native-next','codebuddy.ai/requestId':'native-third',
         'codebuddy.ai/messageRequestId':second.inputId,'codebuddy.ai/messageId':second.inputId,'codebuddy.ai/steerClientMeta':next.params['_meta']}}}});
     await tick();f.send(echo);await tick();
@@ -625,7 +805,7 @@ test('conflicting steer transitions block later control instead of assigning a n
     for(const input of inputs)assert.equal((await f.adapter.steer(input).receipt).status,'accepted');
     for(let i=0;i<inputs.length;i++) {
       const input=inputs[i]!,command=f.calls.find(call=>call.id===input.operationId)!;
-      f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',messageId:input.inputId,
+      f.send({jsonrpc:'2.0',method:'session/update',params:{sessionId:f.session,update:{sessionUpdate:'user_message_chunk',messageId:input.inputId,content:{type:'text',text:input.text},
         _meta:{'codebuddy.ai/conversationRequestId':f.run,'codebuddy.ai/requestId':`fork-owner-${i}`,
           'codebuddy.ai/messageRequestId':input.inputId,'codebuddy.ai/messageId':input.inputId,'codebuddy.ai/steerClientMeta':command.params['_meta']}}}});
       await tick();

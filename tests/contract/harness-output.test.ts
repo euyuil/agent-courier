@@ -25,6 +25,18 @@ test('unsealed earlier output blocks later output, and final text alone never co
     assert.equal((r.db.prepare('SELECT status FROM runs').get() as {status:string}).status,'running');
   }finally{await r.dispose();}
 });
+
+test('an unfinished hidden output cannot block a selected final or change the authoritative Run completion',async()=>{
+  for(const hiddenBy of ['policy','visibility'] as const){const r=rig();try{
+    if(hiddenBy==='policy')await r.restart({...r.config,display:{...r.config.display,defaults:{...r.config.display.defaults,progress:false}}});
+    await r.courier.accept(r.platform.inbound());const [ref,state]=[...r.harness.sessions][0]!,run=state.activeRun!;
+    r.harness.emit(ref,run,'message.started',{messageId:'hidden-unfinished',kind:'progress',userVisible:hiddenBy==='policy',logicalOrder:0});
+    r.harness.message(ref,run,'final','selected final');r.harness.complete(ref);await r.courier.flush();
+    assert.deepEqual(r.platform.visible.map(value=>value.payload),['selected final']);
+    assert.equal((r.db.prepare('SELECT status FROM runs').get() as {status:string}).status,'completed');
+    assert.equal((r.db.prepare("SELECT completeness FROM output_messages WHERE sourceMessageId='hidden-unfinished'").get() as {completeness:string}).completeness,'assembling');
+  }finally{await r.dispose();}}
+});
 test('fragment identity/index/content conflicts are invalid; empty messages require the explicit -1 boundary',async()=>{
   for(const conflict of ['index','key','content']){const r=rig();try{
     await r.courier.accept(r.platform.inbound());const [ref,state]=[...r.harness.sessions][0]!,run=state.activeRun!;

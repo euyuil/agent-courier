@@ -1,6 +1,7 @@
 import type { Runtime } from './runtime.js';
-import type { HarnessOperation } from '../domain/run.js';
+import { terminal,type HarnessOperation,type Run } from '../domain/run.js';
 import type { HarnessBinding } from '../domain/session.js';
+import type { PendingInput } from '../domain/pending-input.js';
 import type { OutboundDelivery } from '../domain/delivery.js';
 import { CourierError } from '../domain/errors.js';
 import { byId,update } from '../storage/records.js';
@@ -8,6 +9,8 @@ import { transaction } from '../storage/database.js';
 import { nextRetry } from '../delivery/retry-policy.js';
 import { recordReceipt } from './dispatch.js';
 import { reportFailure } from './failure-reporting.js';
+import { normalizeReceipt } from '../adapters/harness/receipt.js';
+import { projectOutput } from './output-projector.js';
 
 export async function reconcile(ctx:Runtime,target:{operation?:string;delivery?:string}):Promise<boolean> {
   if(!!target.operation===!!target.delivery)throw new CourierError('configuration_invalid');
@@ -31,22 +34,52 @@ export async function reconcile(ctx:Runtime,target:{operation?:string;delivery?:
   if(!operation || operation.status!=='unknown')throw new CourierError('configuration_invalid');
   const binding=byId<HarnessBinding>(ctx.db,'harness_bindings',operation.bindingId)!;
   const result=await ctx.harness.inspect({operationId:operation.id,...(binding.harnessSessionId?{sessionRef:binding.harnessSessionId}:{}),...(operation.expectedRunRef?{runRef:operation.expectedRunRef}:{})});
-  if(result.status!=='known' || !result.authoritative || !result.evidenceRef || !result.receipt || result.receipt.status==='unknown')return false;
-  if(operation.kind==='create' || operation.kind==='load') {
-    transaction(ctx.db,()=>{
-      update(ctx.db,'harness_operations',operation.id,{status:result.receipt!.status,evidenceRef:result.evidenceRef});
-      if(result.receipt!.status==='accepted')update(ctx.db,'harness_bindings',binding.id,{harnessSessionId:result.receipt!.sessionRef,status:'ready',revision:binding.revision+1});
-      else update(ctx.db,'harness_bindings',binding.id,{status:operation.kind==='create'?'blocked':'unavailable',revision:binding.revision+1});
-    });
-  } else {
-    transaction(ctx.db,()=>{
-      recordReceipt(ctx,operation,result.receipt!);
-      if(operation.runId && result.runState) {
-        const run=ctx.db.prepare('SELECT status FROM runs WHERE id=?').get(operation.runId) as {status:string};
-        if(!['completed','failed','not_started'].includes(run.status))update(ctx.db,'runs',operation.runId,{status:result.runState,
-          ...(['completed','failed'].includes(result.runState)?{completionEvidenceRef:result.evidenceRef,finishedAt:ctx.clock.now()}:{} )});
+  if(result.status!=='known' || result.authoritative!==true || typeof result.evidenceRef!=='string'||!result.evidenceRef || !result.receipt || result.receipt.status==='unknown')return false;
+  return transaction(ctx.db,()=>{
+    const current=byId<HarnessOperation>(ctx.db,'harness_operations',operation.id)!;
+    const currentBinding=byId<HarnessBinding>(ctx.db,'harness_bindings',operation.bindingId)!;
+    const run=operation.runId?byId<Run>(ctx.db,'runs',operation.runId):undefined;
+    const pending=operation.pendingInputId?byId<PendingInput>(ctx.db,'pending_inputs',operation.pendingInputId):undefined;
+    const expectedRunRef=run?.harnessRunRef??operation.expectedRunRef;
+    const receipt=normalizeReceipt(result.receipt!,{
+      ...(currentBinding.harnessSessionId?{sessionRef:currentBinding.harnessSessionId}:{}),
+      ...(run?{requiresRun:true,...(expectedRunRef?{runRef:expectedRunRef}:{})}:{}),
+      ...(pending?{requestId:pending.vendorRequestId}:{})});
+    // 查询等待期间到达的新事实不能被较早查询的附带状态覆盖。
+    if(current.status!=='unknown') {
+      if(receipt.status!=='unknown'&&current.status!==receipt.status)recordReceipt(ctx,current,receipt);
+      return false;
+    }
+    const claimed=receipt.status==='accepted'?ctx.db.prepare('SELECT id FROM harness_bindings WHERE harnessInstanceId=? AND harnessSessionId=? AND id!=?')
+      .get(currentBinding.harnessInstanceId,receipt.sessionRef,currentBinding.id):undefined;
+    if(receipt.status==='unknown'||claimed||result.runState!==undefined&&!['running','waiting_input','completed','failed'].includes(result.runState)) {
+      recordReceipt(ctx,current,{status:'unknown',errorCode:'protocol_conflict'});return false;
+    }
+    if(operation.kind==='create' || operation.kind==='load') {
+      update(ctx.db,'harness_operations',operation.id,{status:receipt.status,evidenceRef:result.evidenceRef,resultCode:receipt.status==='rejected'?receipt.errorCode:undefined});
+      if(receipt.status==='accepted')update(ctx.db,'harness_bindings',binding.id,{harnessSessionId:receipt.sessionRef,
+        status:result.sessionAvailable===false?'unavailable':'ready',revision:currentBinding.revision+1});
+      else update(ctx.db,'harness_bindings',binding.id,{status:operation.kind==='create'?'blocked':'unavailable',revision:currentBinding.revision+1});
+    } else {
+      recordReceipt(ctx,current,receipt);
+      const recorded=byId<HarnessOperation>(ctx.db,'harness_operations',operation.id)!;
+      if(recorded.status!==receipt.status)return false;
+      if(run&&result.runState) {
+        const latest=byId<Run>(ctx.db,'runs',run.id)!;
+        if(!terminal(latest.status)) {
+          const ended=terminal(result.runState);
+          update(ctx.db,'runs',run.id,{status:result.runState,revision:latest.revision+1,
+            ...(ended?{completionEvidenceRef:result.evidenceRef,finishedAt:ctx.clock.now()}:{} )});
+          if(ended)ctx.db.prepare("UPDATE pending_inputs SET validity='closed_by_run',revision=revision+1 WHERE runId=? AND validity='open'").run(run.id);
+          if(result.runState==='failed') {
+            const target=ctx.db.prepare('SELECT p.recipientId FROM courier_sessions c JOIN platform_conversations p ON p.id=c.platformConversationId WHERE c.id=?')
+              .get(run.courierSessionId) as {recipientId:string};
+            reportFailure(ctx,{recipientId:target.recipientId,runId:run.id},'run_failed');
+          }
+          projectOutput(ctx,run.id);
+        }
       }
-    });
-  }
-  return byId<HarnessOperation>(ctx.db,'harness_operations',operation.id)!.status!=='unknown';
+    }
+    return true;
+  });
 }

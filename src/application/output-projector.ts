@@ -14,17 +14,21 @@ export function projectOutput(ctx:Runtime,runId:string):void {
   const run=byId<Run>(ctx.db,'runs',runId)!;
   const target=ctx.db.prepare('SELECT p.recipientId FROM courier_sessions c JOIN platform_conversations p ON p.id=c.platformConversationId WHERE c.id=?').get(run.courierSessionId) as {recipientId:string};
   const messages=ctx.db.prepare('SELECT * FROM output_messages WHERE runId=? ORDER BY logicalSequence').all(runId).map(row=>decode<OutputMessage>(row)!);
+  let orderedBlocked=false;
   for(const message of messages) {
     const mapped=decode<PendingInput>(ctx.db.prepare('SELECT * FROM pending_inputs WHERE runId=? AND sourceMessageId=?').get(runId,message.sourceMessageId));
     if(mapped && message.kind!==(mapped.kind==='question'?'question':'permission_request')) {
       invalidateMessage(ctx,message);update(ctx.db,'harness_bindings',run.bindingId,{status:'unknown'});message.completeness='invalid';
     }
-    if(message.completeness==='assembling')break;
+    const human=message.kind==='question'||message.kind==='permission_request';
+    if(message.completeness==='assembling'){if(message.selected)orderedBlocked=true;continue;}
+    // 普通选中输出仍按原顺序投递；完整人工请求须能先送达，才能让未完成输出继续。
+    if(orderedBlocked&&!human)continue;
     if(message.completeness==='invalid') {reportFailure(ctx,{recipientId:target.recipientId,runId},'output_unsupported');continue;}
     if(ctx.db.prepare('SELECT 1 FROM delivery_messages WHERE outputMessageId=?').get(message.id))continue;
     if(message.kind==='question'||message.kind==='permission_request') {
       const pending=decode<PendingInput>(ctx.db.prepare('SELECT * FROM pending_inputs WHERE runId=? AND sourceMessageId=?').get(runId,message.sourceMessageId));
-      if(!pending){if(message.selected)break;continue;}presentRequest(ctx,pending);continue;
+      if(!pending){if(message.selected)orderedBlocked=true;continue;}presentRequest(ctx,pending);continue;
     }
     if(!message.selected)continue;
     const text=getContent(ctx.db,message.contentRef);
